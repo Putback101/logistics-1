@@ -111,6 +111,7 @@ $rows = $supplier->getAll();
       <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
           <form method="POST" action="../controllers/SupplierController.php">
+            <input type="hidden" name="add_supplier" value="1">
             <div class="modal-header">
               <h5 class="modal-title">Add Supplier</h5>
               <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -139,7 +140,7 @@ $rows = $supplier->getAll();
 
             <div class="modal-footer">
               <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-              <button class="btn btn-primary" name="add_supplier">
+              <button type="submit" class="btn btn-primary" name="add_supplier">
                 <i class="bi bi-plus-circle"></i> Add
               </button>
             </div>

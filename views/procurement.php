@@ -27,6 +27,7 @@ $suppliers = $supplier->getAll();
 $pos = $po->getAll();
 
 $activeTab = isset($_GET['tab']) ? $_GET['tab'] : 'purchase-orders';
+$returnTo = 'procurement.php?tab=' . urlencode($activeTab);
 ?>
 
 <?php include "layout/header.php"; ?>
@@ -93,10 +94,10 @@ $activeTab = isset($_GET['tab']) ? $_GET['tab'] : 'purchase-orders';
                     </span>
                 </td>
                 <td class="text-end">
-                  <a href="purchase_order_view.php?id=<?= $p['id'] ?>" class="btn btn-sm btn-outline-secondary">
+                  <a href="purchase_order_view.php?id=<?= $p['id'] ?>&view=1&return=<?= rawurlencode($returnTo) ?>" class="btn btn-sm btn-outline-secondary">
                     <i class="bi bi-eye"></i>
                   </a>
-                  <?php if ($canEdit): ?>
+                  <?php if ($canEdit && (($p['status'] ?? '') !== 'Approved')): ?>
                     <a href="procurement_edit.php?po_id=<?= $p['id'] ?>" class="btn btn-sm btn-outline-secondary">
                       <i class="bi bi-pencil"></i>
                     </a>

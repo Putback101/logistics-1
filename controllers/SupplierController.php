@@ -13,7 +13,7 @@ $canAdd = in_array($role, ['admin','manager'], true);
 $s = new Supplier($pdo);
 
 // ADD (admin/manager)
-if (isset($_POST['add_supplier'])) {
+if (isset($_POST['add_supplier']) || isset($_POST['add'])) {
   if (!$canAdd) { http_response_code(403); exit; }
 
   $name = trim($_POST['name'] ?? '');

@@ -21,5 +21,3 @@ $base = app_base_url();
   <link rel="stylesheet" href="<?= $base ?>/assets/css/style.css">
 </head>
 <body class="hr-ui">
-  <button class="hamburger" id="hamburger" aria-label="Toggle menu"><i class="fas fa-bars"></i></button>
-

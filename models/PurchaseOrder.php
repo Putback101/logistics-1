@@ -37,6 +37,29 @@ class PurchaseOrder {
     )->fetchAll();
   }
 
+  public function nextNumber(): string {
+    $year = date('Y');
+    $prefix = "PO-$year-";
+    $stmt = $this->pdo->prepare(
+      "SELECT po_number
+       FROM purchase_orders
+       WHERE po_number LIKE ?
+       ORDER BY id DESC
+       LIMIT 1"
+    );
+    $stmt->execute([$prefix . '%']);
+    $last = $stmt->fetchColumn();
+
+    $seq = 1;
+    if (is_string($last) && str_starts_with($last, $prefix)) {
+      $parts = explode('-', $last);
+      $lastSeq = (int)end($parts);
+      if ($lastSeq > 0) $seq = $lastSeq + 1;
+    }
+
+    return $prefix . str_pad((string)$seq, 4, '0', STR_PAD_LEFT);
+  }
+
   // $supplierId can be 0 if using legacy supplier text only
   public function create(string $poNumber, int $supplierId, string $supplierName, int $createdBy): int {
     if ($this->hasSupplierId()) {

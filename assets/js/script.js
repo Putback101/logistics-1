@@ -5,40 +5,56 @@ const sidebar = document.getElementById('sidebar');
 const hamburger = document.getElementById('hamburger');
 const navLinks = document.querySelectorAll('.nav-link');
 const profileMenu = document.getElementById('profileMenu');
+const sidebarClose = document.getElementById('sidebarClose');
 
 // Initial check for screen size and set collapsed state
 const checkCollapseState = () => {
+    if (!sidebar) return;
     sidebar.classList.add('collapsed');
     sidebar.classList.remove('open');
 };
-checkCollapseState();
-window.addEventListener('resize', checkCollapseState);
+if (sidebar) {
+    checkCollapseState();
+    window.addEventListener('resize', checkCollapseState);
+}
 
 // Sidebar is now always collapsed by default - only toggle with hamburger button
 // No hover expansion
 
 // Toggle sidebar on mobile/tablet (Hamburger menu)
-hamburger.addEventListener('click', () => {
-    if (window.innerWidth < 1024) {
-        sidebar.classList.toggle('open');
-        sidebar.classList.remove('collapsed');
-    } else {
-        sidebar.classList.toggle('open');
-        sidebar.classList.toggle('collapsed');
-    }
-});
+if (hamburger && sidebar) {
+    hamburger.addEventListener('click', () => {
+        if (window.innerWidth < 1024) {
+            sidebar.classList.toggle('open');
+            sidebar.classList.remove('collapsed');
+        } else {
+            sidebar.classList.toggle('open');
+            sidebar.classList.toggle('collapsed');
+        }
+    });
+}
+
+if (sidebarClose && sidebar) {
+    sidebarClose.addEventListener('click', () => {
+        sidebar.classList.remove('open');
+        sidebar.classList.add('collapsed');
+    });
+}
 
 // Handle profile dropdown toggle (for better touch support)
-profileMenu.addEventListener('click', (e) => {
-    e.stopPropagation(); // Prevent the click from immediately bubbling up and closing the menu
-    profileMenu.classList.toggle('open');
-});
+if (profileMenu) {
+    profileMenu.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent the click from immediately bubbling up and closing the menu
+        profileMenu.classList.toggle('open');
+    });
+}
 
 // Close profile dropdown when clicking outside
 document.addEventListener('click', (e) => {
+    if (!profileMenu) return;
     const profileDropdown = document.querySelector('.profile-dropdown');
     if (profileDropdown && !profileMenu.contains(e.target)) {
-        profileDropdown.style.display = 'none';
+        profileMenu.classList.remove('open');
     }
 });
 
@@ -243,7 +259,7 @@ menuLinks.forEach(link => {
         }
 
         // On mobile, close sidebar after click
-        if (window.innerWidth <= 1024) {
+        if (window.innerWidth <= 1024 && sidebar) {
             sidebar.classList.remove('open');
         }
     });

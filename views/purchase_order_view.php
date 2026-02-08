@@ -21,7 +21,16 @@ $items = $po->getItems((int)$data['id']);
 $ap = $approval->getLatest('purchase_orders', (int)$data['id']);
 $apStatus = $ap['status'] ?? 'Pending';
 
-$editable = can_edit_po($data);
+$readonly = (($_GET['view'] ?? '') === '1');
+$editable = !$readonly && can_edit_po($data);
+
+$return = $_GET['return'] ?? 'purchase_orders.php';
+$safeReturn = 'purchase_orders.php';
+if (is_string($return)) {
+  if (str_starts_with($return, 'procurement.php') || str_starts_with($return, 'purchase_orders.php')) {
+    $safeReturn = $return;
+  }
+}
 ?>
 <?php require_once __DIR__ . "/layout/header.php"; ?>
 
@@ -42,7 +51,7 @@ $editable = can_edit_po($data);
             <?= !empty($data['is_locked']) ? ' • <span class="badge bg-secondary">Locked</span>' : '' ?>
           </div>
         </div>
-        <a class="btn btn-outline-secondary" href="purchase_orders.php"><i class="bi bi-arrow-left"></i> Back</a>
+        <a class="btn btn-outline-secondary" href="<?= htmlspecialchars($safeReturn) ?>"><i class="bi bi-arrow-left"></i> Back</a>
       </div>
 
       <div class="row g-3">
@@ -76,7 +85,7 @@ $editable = can_edit_po($data);
               </form>
             <?php else: ?>
               <div class="alert alert-warning mb-0">
-                This PO is locked or not editable at this stage.
+                <?= $readonly ? 'View only. Editing is disabled.' : 'This PO is locked or not editable at this stage.' ?>
               </div>
             <?php endif; ?>
           </div>
@@ -101,6 +110,7 @@ $editable = can_edit_po($data);
               </table>
             </div>
 
+            <?php if (!$readonly): ?>
             <div class="mt-3 d-flex flex-wrap gap-2">
 
               <!-- Request Approval -->
@@ -143,6 +153,7 @@ $editable = can_edit_po($data);
               <?php endif; ?>
 
             </div>
+            <?php endif; ?>
 
             <div class="mt-2">
               <span class="badge <?= $apStatus==='Approved' ? 'bg-success' : ($apStatus==='Rejected' ? 'bg-danger' : 'bg-warning text-dark') ?>">

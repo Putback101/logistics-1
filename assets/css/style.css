@@ -15,7 +15,7 @@
           --color-text-secondaey: #a0a0a8;
           --color-neon-accent: #00e676;
           --coloe-border: #33333a;
-          display: flex;
+          display: block;
           height: 100vh;
           overflow-x: hidden;
           transition: background 0.5s ease;

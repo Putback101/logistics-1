@@ -13,6 +13,7 @@ requireRole(['admin','manager','procurement']);
 $po = new PurchaseOrder($pdo);
 $approval = new Approval($pdo);
 $rows = $po->getAll();
+$nextPoNumber = $po->nextNumber();
 ?>
 <?php require_once __DIR__ . "/layout/header.php"; ?>
 
@@ -28,8 +29,8 @@ $rows = $po->getAll();
         <h5 class="mb-3">Create PO</h5>
         <form method="POST" action="../controllers/PurchaseOrderController.php" class="row g-3">
           <div class="col-md-4">
-            <label class="form-label">PO Number</label>
-            <input name="po_number" class="form-control" placeholder="PO-2026-001" required>
+            <label class="form-label">PO Number (Auto)</label>
+            <input name="po_number" class="form-control" value="<?= htmlspecialchars($nextPoNumber) ?>" readonly>
           </div>
           <div class="col-md-5">
             <label class="form-label">Supplier</label>

@@ -21,11 +21,7 @@ $supplierModel = new Supplier($pdo);
 
 /* CREATE PO */
 if (isset($_POST['add_po'])) {
-  $poNumber = trim($_POST['po_number'] ?? '');
-  if ($poNumber === '') {
-    set_flash('error', 'PO Number is required.');
-    header("Location: ../views/purchase_orders.php"); exit;
-  }
+  $poNumber = $po->nextNumber();
 
   $supplierId = $_POST['supplier_id'] ?? '';
   $supplierId = ctype_digit((string)$supplierId) ? (int)$supplierId : 0;
@@ -49,7 +45,7 @@ if (isset($_POST['add_po'])) {
   audit_log($pdo, "Created purchase order ($poNumber)", "purchase_orders", (int)$newId);
 
   set_flash('success', 'Purchase order created.');
-  header("Location: ../views/purchase_order_view.php?id=$newId"); exit;
+  header("Location: ../views/purchase_orders.php"); exit;
 }
 
 /* ADD ITEM (blocked if locked / not allowed) */
