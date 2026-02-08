@@ -75,7 +75,7 @@ if (!function_exists('any_active')) {
         <a class="nav-link"
            href="<?= $base ?>/views/projects.php">
           <i class="bi bi-diagram-3"></i>
-          <span class="nav-label">Projects</span>
+          <span class="nav-label">Project Management</span>
         </a>
       </li>
     <?php endif; ?>
@@ -86,7 +86,7 @@ if (!function_exists('any_active')) {
         <a class="nav-link"
            href="<?= $base ?>/views/fleet.php">
           <i class="bi bi-box-seam"></i>
-          <span class="nav-label">Assets</span>
+          <span class="nav-label">Asset Management</span>
         </a>
       </li>
     <?php endif; ?>
