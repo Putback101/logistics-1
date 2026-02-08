@@ -98,14 +98,6 @@ if (modal) {
     });
 }
 
-// Function to open add procurement modal
-function openAddProcurementModal() {
-    const formHTML = document.getElementById('addProcurementForm')?.innerHTML || '';
-    if (formHTML) {
-        openModal('Add Procurement Request', formHTML);
-    }
-}
-
 // Function to open add supplier modal
 function openAddSupplierModal() {
     const formHTML = document.getElementById('addSupplierForm')?.innerHTML || '';

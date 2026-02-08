@@ -115,6 +115,15 @@ class PurchaseOrder {
     $this->recomputeTotal($poId);
   }
 
+  public function updateItem(int $itemId, string $item, int $qty, float $unit): void {
+    $stmt = $this->pdo->prepare(
+      "UPDATE purchase_order_items
+       SET item_name = ?, quantity = ?, unit_cost = ?
+       WHERE id = ?"
+    );
+    $stmt->execute([$item, $qty, $unit, $itemId]);
+  }
+
   public function recomputeTotal(int $poId): void {
     $stmt = $this->pdo->prepare(
       "SELECT COALESCE(SUM(quantity * unit_cost),0) total
@@ -131,6 +140,15 @@ class PurchaseOrder {
   public function setStatus(int $poId, string $status): void {
     $stmt = $this->pdo->prepare("UPDATE purchase_orders SET status = ? WHERE id = ?");
     $stmt->execute([$status, $poId]);
+  }
+
+  public function updateSupplier(int $poId, int $supplierId, string $supplierName): void {
+    $stmt = $this->pdo->prepare(
+      "UPDATE purchase_orders
+       SET supplier_id = ?, supplier = ?
+       WHERE id = ?"
+    );
+    $stmt->execute([$supplierId ?: null, $supplierName, $poId]);
   }
 
   public function delete(int $id): void {

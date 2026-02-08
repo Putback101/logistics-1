@@ -20,11 +20,13 @@ $userRole = $_SESSION['user']['role'] ?? 'staff';
 $canAdd = hasPermission($userRole, 'procurement', 'add');
 $canEdit = hasPermission($userRole, 'procurement', 'edit');
 $canDelete = hasPermission($userRole, 'procurement', 'delete');
+$isAdmin = ($userRole === 'admin');
 
 $requests = $procurement->getAll();
 $budgets = $budget->getAll();
 $suppliers = $supplier->getAll();
 $pos = $po->getAll();
+$nextPoNumber = $po->nextNumber();
 
 $activeTab = isset($_GET['tab']) ? $_GET['tab'] : 'purchase-orders';
 $returnTo = 'procurement.php?tab=' . urlencode($activeTab);
@@ -59,14 +61,32 @@ $returnTo = 'procurement.php?tab=' . urlencode($activeTab);
 
     <!-- PURCHASE ORDERS TAB -->
     <?php if ($activeTab === 'purchase-orders'): ?>
-      <!-- ACTION BAR -->
-      <div class="mb-4">
-        <?php if ($canAdd): ?>
-        <button class="btn btn-primary" onclick="openAddProcurementModal()">
-          <i class="bi bi-plus-circle"></i> Add Procurement Request
-        </button>
-        <?php endif; ?>
+      <?php if ($canAdd): ?>
+      <div class="form-card mb-4">
+        <h5 class="mb-3">Create PO</h5>
+        <form method="POST" action="../controllers/PurchaseOrderController.php" class="row g-3">
+          <input type="hidden" name="return" value="procurement.php?tab=purchase-orders">
+          <div class="col-md-4">
+            <label class="form-label">PO Number (Auto)</label>
+            <input name="po_number" class="form-control" value="<?= htmlspecialchars($nextPoNumber) ?>" readonly>
+          </div>
+          <div class="col-md-5">
+            <label class="form-label">Supplier</label>
+            <select name="supplier_id" class="form-control" required>
+              <option value="">-- Select Supplier --</option>
+              <?php foreach($suppliers as $s): ?>
+                <option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['name']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="col-md-3 d-flex align-items-end">
+            <button class="btn btn-primary w-100" name="add_po">
+              <i class="bi bi-plus-circle"></i> Create
+            </button>
+          </div>
+        </form>
       </div>
+      <?php endif; ?>
 
       <!-- PURCHASE ORDERS TABLE -->
       <div class="table-card mb-4">
@@ -94,11 +114,14 @@ $returnTo = 'procurement.php?tab=' . urlencode($activeTab);
                     </span>
                 </td>
                 <td class="text-end">
-                  <a href="purchase_order_view.php?id=<?= $p['id'] ?>&view=1&return=<?= rawurlencode($returnTo) ?>" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-eye"></i>
-                  </a>
-                  <?php if ($canEdit && (($p['status'] ?? '') !== 'Approved')): ?>
-                    <a href="procurement_edit.php?po_id=<?= $p['id'] ?>" class="btn btn-sm btn-outline-secondary">
+                  <?php if (($p['status'] ?? '') === 'Approved'): ?>
+                    <a href="purchase_order_view.php?id=<?= $p['id'] ?>&view=1&return=<?= rawurlencode($returnTo) ?>" class="btn btn-sm btn-outline-secondary">
+                      <i class="bi bi-eye"></i>
+                    </a>
+                  <?php endif; ?>
+                  <?php if ($canEdit && in_array(($p['status'] ?? ''), ['Draft','Pending Approval'], true)): ?>
+                    <a href="purchase_order_edit.php?id=<?= $p['id'] ?>&return=procurement.php?tab=purchase-orders"
+                       class="btn btn-sm btn-outline-secondary">
                       <i class="bi bi-pencil"></i>
                     </a>
                   <?php endif; ?>
@@ -119,44 +142,6 @@ $returnTo = 'procurement.php?tab=' . urlencode($activeTab);
           <?php endif; ?>
         </div>
       </div>
-
-      <?php if ($canAdd): ?>
-      <!-- ADD PROCUREMENT FORM (Hidden by default, shown in modal) -->
-      <div id="addProcurementForm" style="display: none;">
-        <form method="POST" action="../controllers/ProcurementController.php" class="row g-3">
-          <div class="col-12">
-            <label class="form-label">Item Name</label>
-            <input type="text" name="item_name" class="form-control" required>
-          </div>
-
-          <div class="col-md-6">
-            <label class="form-label">Quantity</label>
-            <input type="number" name="quantity" class="form-control" required>
-          </div>
-
-          <div class="col-md-6">
-            <label class="form-label">Supplier</label>
-            <input type="text" name="supplier" class="form-control" required>
-          </div>
-
-          <div class="col-12">
-            <label class="form-label">Status</label>
-            <select name="status" class="form-select">
-              <option value="Pending">Pending</option>
-              <option value="Approved">Approved</option>
-              <option value="Delivered">Delivered</option>
-            </select>
-          </div>
-
-          <div class="col-12 d-flex gap-2">
-            <button type="submit" name="add" class="btn btn-primary flex-grow-1">
-              <i class="bi bi-plus-circle"></i> Add Request
-            </button>
-            <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-          </div>
-        </form>
-      </div>
-      <?php endif; ?>
 
       <!-- PROCUREMENT REQUESTS TABLE (Legacy - now using PO section above) -->
       <div class="table-card" style="display: none;">
@@ -187,7 +172,9 @@ $returnTo = 'procurement.php?tab=' . urlencode($activeTab);
                 <th>Contact Person</th>
                 <th>Email</th>
                 <th>Phone</th>
-                <th class="text-end">Actions</th>
+                <?php if ($isAdmin): ?>
+                  <th class="text-end">Actions</th>
+                <?php endif; ?>
               </tr>
             </thead>
             <tbody>
@@ -197,20 +184,30 @@ $returnTo = 'procurement.php?tab=' . urlencode($activeTab);
                 <td><?= htmlspecialchars($s['contact_person'] ?? '') ?></td>
                 <td><?= htmlspecialchars($s['email'] ?? '') ?></td>
                 <td><?= htmlspecialchars($s['phone'] ?? '') ?></td>
-                <td class="text-end">
-                  <?php if ($canEdit): ?>
-                    <a href="procurement_edit.php?supplier_id=<?= $s['id'] ?>" class="btn btn-sm btn-outline-secondary">
+                <?php if ($isAdmin): ?>
+                  <td class="text-end">
+                    <button
+                      class="btn btn-sm btn-outline-secondary"
+                      data-bs-toggle="modal"
+                      data-bs-target="#editSupplierModal"
+                      data-id="<?= (int)$s['id'] ?>"
+                      data-name="<?= htmlspecialchars($s['name'] ?? '', ENT_QUOTES) ?>"
+                      data-contact="<?= htmlspecialchars($s['contact_person'] ?? '', ENT_QUOTES) ?>"
+                      data-email="<?= htmlspecialchars($s['email'] ?? '', ENT_QUOTES) ?>"
+                      data-phone="<?= htmlspecialchars($s['phone'] ?? '', ENT_QUOTES) ?>"
+                    >
                       <i class="bi bi-pencil"></i>
-                    </a>
-                  <?php endif; ?>
-                  <?php if ($canDelete): ?>
-                    <a href="../controllers/SupplierController.php?delete=<?= $s['id'] ?>"
-                       class="btn btn-sm btn-outline-danger"
-                       onclick="return confirm('Delete this supplier?')">
-                      <i class="bi bi-trash"></i>
-                    </a>
-                  <?php endif; ?>
-                </td>
+                    </button>
+                    <form method="POST" action="../controllers/SupplierController.php"
+                          class="d-inline"
+                          onsubmit="return confirm('Delete this supplier?');">
+                      <input type="hidden" name="id" value="<?= (int)$s['id'] ?>">
+                      <button class="btn btn-sm btn-outline-danger" name="delete_supplier">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </form>
+                  </td>
+                <?php endif; ?>
               </tr>
               <?php endforeach; ?>
             </tbody>
@@ -256,6 +253,52 @@ $returnTo = 'procurement.php?tab=' . urlencode($activeTab);
         </form>
       </div>
       <?php endif; ?>
+    <?php endif; ?>
+
+
+    <!-- EDIT SUPPLIER MODAL (ADMIN ONLY) -->
+    <?php if ($isAdmin): ?>
+    <div class="modal fade" id="editSupplierModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+          <form method="POST" action="../controllers/SupplierController.php">
+            <input type="hidden" name="id" id="edit_id">
+            <div class="modal-header">
+              <h5 class="modal-title">Edit Supplier</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">Supplier Name</label>
+                  <input name="name" id="edit_name" class="form-control" required>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Contact Person</label>
+                  <input name="contact_person" id="edit_contact_person" class="form-control">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Email</label>
+                  <input type="email" name="email" id="edit_email" class="form-control">
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Phone</label>
+                  <input name="phone" id="edit_phone" class="form-control">
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button class="btn btn-primary" name="update_supplier">
+                <i class="bi bi-save"></i> Save Changes
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
     <?php endif; ?>
 
     <!-- BUDGET TAB -->
@@ -339,6 +382,23 @@ $returnTo = 'procurement.php?tab=' . urlencode($activeTab);
 
   </div>
 </main>
+
+<?php if ($isAdmin): ?>
+<script>
+  // Fill Edit Supplier Modal from button data-*
+  const editModal = document.getElementById('editSupplierModal');
+  editModal?.addEventListener('show.bs.modal', function (event) {
+    const btn = event.relatedTarget;
+    if (!btn) return;
+
+    document.getElementById('edit_id').value = btn.getAttribute('data-id') || '';
+    document.getElementById('edit_name').value = btn.getAttribute('data-name') || '';
+    document.getElementById('edit_contact_person').value = btn.getAttribute('data-contact') || '';
+    document.getElementById('edit_email').value = btn.getAttribute('data-email') || '';
+    document.getElementById('edit_phone').value = btn.getAttribute('data-phone') || '';
+  });
+</script>
+<?php endif; ?>
 
 <?php include "layout/footer.php"; ?>
 

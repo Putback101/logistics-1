@@ -139,7 +139,7 @@ if (in_array($role, ['manager','procurement'], true)) {
         <?php endif; ?>
       </p>
 
-      <?php if ($role === 'admin'): ?>
+      <?php if (in_array($role, ['admin','manager'], true)): ?>
         <div class="table-card mb-4">
           <h5 class="mb-3">Pending Purchase Order Approvals</h5>
 

@@ -71,9 +71,20 @@ $nextPoNumber = $po->nextNumber();
                   </span>
                 </td>
                 <td class="text-end">
-                  <a class="btn btn-sm btn-outline-primary" href="purchase_order_view.php?id=<?= $r['id'] ?>">
-                    <i class="bi bi-eye"></i> View
-                  </a>
+                  <?php if (($r['status'] ?? '') === 'Approved'): ?>
+                    <a class="btn btn-sm btn-outline-primary"
+                       href="purchase_order_view.php?id=<?= $r['id'] ?>&view=1">
+                      <i class="bi bi-eye"></i> View
+                    </a>
+                  <?php endif; ?>
+
+                  <?php if (in_array($r['status'] ?? '', ['Draft','Pending Approval'], true)): ?>
+                    <a class="btn btn-sm btn-outline-secondary"
+                       href="purchase_order_edit.php?id=<?= $r['id'] ?>&return=purchase_orders.php">
+                      <i class="bi bi-pencil"></i> Edit
+                    </a>
+                  <?php endif; ?>
+
                   <a class="btn btn-sm btn-outline-danger"
                      href="../controllers/PurchaseOrderController.php?delete=<?= $r['id'] ?>"
                      onclick="return confirm('Delete this PO?')">

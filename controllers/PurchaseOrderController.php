@@ -42,10 +42,29 @@ if (isset($_POST['add_po'])) {
   }
 
   $newId = $po->create($poNumber, $supplierId, $supplierName, (int)$_SESSION['user']['id']);
+  // Clear any stale approvals for this record id (e.g., if IDs were reused)
+  $pdo->prepare("DELETE FROM approvals WHERE module='purchase_orders' AND record_id=?")->execute([(int)$newId]);
+  // Force Draft + unlocked to avoid mismatched defaults
+  try {
+    $pdo->prepare("UPDATE purchase_orders SET status='Draft', is_locked=0 WHERE id=?")->execute([(int)$newId]);
+  } catch (Exception $e) {
+    $pdo->prepare("UPDATE purchase_orders SET status='Draft' WHERE id=?")->execute([(int)$newId]);
+  }
   audit_log($pdo, "Created purchase order ($poNumber)", "purchase_orders", (int)$newId);
 
   set_flash('success', 'Purchase order created.');
-  header("Location: ../views/purchase_orders.php"); exit;
+  $return = $_POST['return'] ?? '';
+  $safeReturn = '../views/purchase_orders.php';
+  if (is_string($return)) {
+    $return = ltrim($return, '/');
+    if (str_starts_with($return, 'views/')) {
+      $return = substr($return, 6);
+    }
+    if (str_starts_with($return, 'procurement.php') || str_starts_with($return, 'purchase_orders.php')) {
+      $safeReturn = '../views/' . $return;
+    }
+  }
+  header("Location: $safeReturn"); exit;
 }
 
 /* ADD ITEM (blocked if locked / not allowed) */
@@ -75,7 +94,23 @@ if (isset($_POST['add_item'])) {
   audit_log($pdo, "Added PO item ($item) qty=$qty unit=$unit", "purchase_orders", (int)$poId);
 
   set_flash('success', 'Item added successfully.');
-  header("Location: ../views/purchase_order_view.php?id=$poId"); exit;
+  $return = $_POST['return'] ?? '';
+  $safeReturn = "../views/purchase_order_view.php?id=$poId";
+  if (is_string($return)) {
+    $return = ltrim($return, '/');
+    if (str_starts_with($return, 'views/')) {
+      $return = substr($return, 6);
+    }
+    if (
+      str_starts_with($return, 'procurement.php') ||
+      str_starts_with($return, 'purchase_orders.php') ||
+      str_starts_with($return, 'purchase_order_edit.php') ||
+      str_starts_with($return, 'purchase_order_view.php')
+    ) {
+      $safeReturn = '../views/' . $return;
+    }
+  }
+  header("Location: $safeReturn"); exit;
 }
 
 /* REQUEST APPROVAL -> Status becomes Pending Approval */
@@ -106,7 +141,142 @@ if (isset($_POST['request_approval'])) {
   audit_log($pdo, "Requested approval (moved to Pending Approval)", "purchase_orders", (int)$poId);
 
   set_flash('success', 'Approval request sent.');
-  header("Location: ../views/purchase_order_view.php?id=$poId"); exit;
+  $return = $_POST['return'] ?? '';
+  $safeReturn = "../views/purchase_order_view.php?id=$poId";
+  if (is_string($return)) {
+    $return = ltrim($return, '/');
+    if (str_starts_with($return, 'views/')) {
+      $return = substr($return, 6);
+    }
+    if (
+      str_starts_with($return, 'procurement.php') ||
+      str_starts_with($return, 'purchase_orders.php') ||
+      str_starts_with($return, 'purchase_order_edit.php') ||
+      str_starts_with($return, 'purchase_order_view.php')
+    ) {
+      $safeReturn = '../views/' . $return;
+    }
+  }
+  header("Location: $safeReturn"); exit;
+}
+
+/* UPDATE PO (Supplier only) */
+if (isset($_POST['update_po'])) {
+  $poId = $_POST['po_id'] ?? '';
+  $supplierId = $_POST['supplier_id'] ?? '';
+  $supplierId = ctype_digit((string)$supplierId) ? (int)$supplierId : 0;
+
+  if (!ctype_digit((string)$poId) || $supplierId <= 0) {
+    set_flash('error', 'Invalid PO update data.');
+    header("Location: ../views/procurement.php?tab=purchase-orders"); exit;
+  }
+
+  $row = $po->getById((int)$poId);
+  if (!$row) {
+    set_flash('error', 'PO not found.');
+    header("Location: ../views/procurement.php?tab=purchase-orders"); exit;
+  }
+
+  if (!in_array($row['status'] ?? '', ['Draft','Pending Approval'], true)) {
+    set_flash('error', 'PO can only be edited while Draft or Pending Approval.');
+    header("Location: ../views/procurement.php?tab=purchase-orders"); exit;
+  }
+
+  $supplierName = $supplierModel->getNameById($supplierId) ?? '';
+  if ($supplierName === '') {
+    set_flash('error', 'Selected supplier not found.');
+    header("Location: ../views/procurement.php?tab=purchase-orders"); exit;
+  }
+
+  $po->updateSupplier((int)$poId, $supplierId, $supplierName);
+  audit_log($pdo, "Updated PO supplier", "purchase_orders", (int)$poId);
+
+  set_flash('success', 'Purchase order updated.');
+  $return = $_POST['return'] ?? '';
+  $safeReturn = '../views/procurement.php?tab=purchase-orders';
+  if (is_string($return)) {
+    $return = ltrim($return, '/');
+    if (str_starts_with($return, 'views/')) {
+      $return = substr($return, 6);
+    }
+    if (str_starts_with($return, 'procurement.php') || str_starts_with($return, 'purchase_orders.php')) {
+      $safeReturn = '../views/' . $return;
+    }
+  }
+  header("Location: $safeReturn"); exit;
+}
+
+/* UPDATE PO + ITEMS (Draft / Pending Approval only) */
+if (isset($_POST['update_po_full'])) {
+  $poId = $_POST['po_id'] ?? '';
+  $supplierId = $_POST['supplier_id'] ?? '';
+  $status = $_POST['status'] ?? '';
+  $items = $_POST['items'] ?? [];
+
+  $supplierId = ctype_digit((string)$supplierId) ? (int)$supplierId : 0;
+  if (!ctype_digit((string)$poId) || $supplierId <= 0) {
+    set_flash('error', 'Invalid PO update data.');
+    header("Location: ../views/procurement.php?tab=purchase-orders"); exit;
+  }
+
+  $row = $po->getById((int)$poId);
+  if (!$row) {
+    set_flash('error', 'PO not found.');
+    header("Location: ../views/procurement.php?tab=purchase-orders"); exit;
+  }
+
+  if (!in_array($row['status'] ?? '', ['Draft','Pending Approval'], true)) {
+    set_flash('error', 'PO can only be edited while Draft or Pending Approval.');
+    header("Location: ../views/procurement.php?tab=purchase-orders"); exit;
+  }
+
+  if (!in_array($status, ['Draft','Pending Approval'], true)) {
+    set_flash('error', 'Invalid status change.');
+    header("Location: ../views/procurement.php?tab=purchase-orders"); exit;
+  }
+
+  $supplierName = $supplierModel->getNameById($supplierId) ?? '';
+  if ($supplierName === '') {
+    set_flash('error', 'Selected supplier not found.');
+    header("Location: ../views/procurement.php?tab=purchase-orders"); exit;
+  }
+
+  $po->updateSupplier((int)$poId, $supplierId, $supplierName);
+
+  if (is_array($items)) {
+    foreach ($items as $itemId => $data) {
+      if (!ctype_digit((string)$itemId)) continue;
+      $itemName = trim($data['item_name'] ?? '');
+      $qty = (int)($data['quantity'] ?? 0);
+      $unit = (float)($data['unit_cost'] ?? 0);
+
+      if ($itemName === '' || $qty <= 0 || $unit < 0) {
+        set_flash('error', 'Invalid item data.');
+        header("Location: ../views/procurement.php?tab=purchase-orders"); exit;
+      }
+
+      $po->updateItem((int)$itemId, $itemName, $qty, $unit);
+    }
+  }
+
+  $po->recomputeTotal((int)$poId);
+  $po->setStatus((int)$poId, $status);
+
+  audit_log($pdo, "Updated PO details", "purchase_orders", (int)$poId);
+
+  set_flash('success', 'Purchase order updated.');
+  $return = $_POST['return'] ?? '';
+  $safeReturn = '../views/procurement.php?tab=purchase-orders';
+  if (is_string($return)) {
+    $return = ltrim($return, '/');
+    if (str_starts_with($return, 'views/')) {
+      $return = substr($return, 6);
+    }
+    if (str_starts_with($return, 'procurement.php') || str_starts_with($return, 'purchase_orders.php')) {
+      $safeReturn = '../views/' . $return;
+    }
+  }
+  header("Location: $safeReturn"); exit;
 }
 
 /* SEND TO SUPPLIER -> Approved -> Sent */
@@ -135,7 +305,23 @@ if (isset($_POST['send_to_supplier'])) {
   audit_log($pdo, "PO sent to supplier", "purchase_orders", (int)$poId);
 
   set_flash('success', 'PO marked as Sent.');
-  header("Location: ../views/purchase_order_view.php?id=$poId"); exit;
+  $return = $_POST['return'] ?? '';
+  $safeReturn = "../views/purchase_order_view.php?id=$poId";
+  if (is_string($return)) {
+    $return = ltrim($return, '/');
+    if (str_starts_with($return, 'views/')) {
+      $return = substr($return, 6);
+    }
+    if (
+      str_starts_with($return, 'procurement.php') ||
+      str_starts_with($return, 'purchase_orders.php') ||
+      str_starts_with($return, 'purchase_order_edit.php') ||
+      str_starts_with($return, 'purchase_order_view.php')
+    ) {
+      $safeReturn = '../views/' . $return;
+    }
+  }
+  header("Location: $safeReturn"); exit;
 }
 
 /* APPROVE / REJECT (ADMIN ONLY) with lock + transition */
@@ -184,7 +370,23 @@ if (isset($_POST['approve']) || isset($_POST['reject'])) {
   }
 
   set_flash('success', "PO $status successfully.");
-  header("Location: ../views/purchase_order_view.php?id=$poId"); exit;
+  $return = $_POST['return'] ?? '';
+  $safeReturn = "../views/purchase_order_view.php?id=$poId";
+  if (is_string($return)) {
+    $return = ltrim($return, '/');
+    if (str_starts_with($return, 'views/')) {
+      $return = substr($return, 6);
+    }
+    if (
+      str_starts_with($return, 'procurement.php') ||
+      str_starts_with($return, 'purchase_orders.php') ||
+      str_starts_with($return, 'purchase_order_edit.php') ||
+      str_starts_with($return, 'purchase_order_view.php')
+    ) {
+      $safeReturn = '../views/' . $return;
+    }
+  }
+  header("Location: $safeReturn"); exit;
 }
 
 /* DELETE PO */
