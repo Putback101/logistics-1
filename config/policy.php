@@ -1,6 +1,8 @@
 <?php
 // logistics-1/config/policy.php
 
+require_once __DIR__ . '/workflow.php';
+
 function role(): string {
   return (string)($_SESSION['user']['role'] ?? '');
 }
@@ -10,8 +12,8 @@ function user_id(): int {
 }
 
 /**
- * Staff should be view-only for PO.
- * Procurement/Manager can work on PO before it’s locked.
+ * Procurement staff are add/view only for PO flow.
+ * Manager can edit while PO is still editable and unlocked.
  * Admin can do anything.
  */
 function can_edit_po(array $po): bool {
@@ -19,31 +21,34 @@ function can_edit_po(array $po): bool {
 
   if ($r === 'admin') return true;
 
-  // lock blocks all non-admin edits
   if (!empty($po['is_locked'])) return false;
 
-  // manager/procurement can edit only while not Approved/Sent/Received
-  if (in_array($r, ['manager','procurement'], true)) {
-    return in_array($po['status'], ['Draft','Pending Approval','Rejected'], true);
+  if ($r === 'manager') {
+    return in_array($po['status'] ?? '', ['Draft','Approved','Rejected'], true);
   }
 
   return false;
 }
 
 /**
- * Who can perform workflow actions.
+ * Workflow action permissions.
  */
 function can_po_action(string $action, array $po): bool {
   $r = role();
+  $status = (string)($po['status'] ?? '');
+  $target = wf_po_next($action);
+
+  if ($target === null || !wf_po_can_transition($status, $target)) {
+    return false;
+  }
 
   if ($r === 'admin') return true;
 
-  if (in_array($r, ['manager','procurement'], true)) {
-    // they can request approval and mark sent after approved
-    return in_array($action, ['request_approval','send_to_supplier'], true);
+  if ($r === 'manager') {
+    return in_array($action, ['request_approval', 'approve', 'reject', 'send_to_supplier'], true);
   }
 
-  if ($r === 'warehouse') {
+  if ($r === 'warehouse_staff') {
     return $action === 'receive_goods';
   }
 
@@ -56,10 +61,7 @@ function can_po_action(string $action, array $po): bool {
  * but also fills entity fields if available.
  */
 function audit_log(PDO $pdo, string $action, ?string $entityType=null, ?int $entityId=null, ?array $meta=null): void {
-  $stmt = $pdo->prepare("
-    INSERT INTO audit_logs (user_id, action, entity_type, entity_id, meta)
-    VALUES (?,?,?,?,?)
-  ");
+  $stmt = $pdo->prepare("\n    INSERT INTO audit_logs (user_id, action, entity_type, entity_id, meta)\n    VALUES (?,?,?,?,?)\n  ");
   $stmt->execute([
     user_id(),
     $action,

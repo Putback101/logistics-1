@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once __DIR__ . "/../config/auth.php";
 require_once __DIR__ . "/../config/database.php";
 
@@ -19,29 +19,7 @@ if (!isset($_GET['po_id']) || !ctype_digit($_GET['po_id'])) {
 $poId = (int)$_GET['po_id'];
 
 try {
-  /**
-   * IMPORTANT:
-   * - Your PO items table is: purchase_order_items
-   * - Your foreign key column is: po_id
-   * - We alias fields to EXACT names used by JS:
-   *   po_qty, received_qty, remaining_qty
-   */
-  $stmt = $pdo->prepare("
-    SELECT
-      i.item_name AS item_name,
-      i.quantity  AS po_qty,
-      COALESCE(SUM(r.quantity_received), 0) AS received_qty,
-      (i.quantity - COALESCE(SUM(r.quantity_received), 0)) AS remaining_qty
-    FROM purchase_order_items i
-    LEFT JOIN receiving r
-      ON r.po_id = i.po_id
-     AND r.item_name = i.item_name
-     AND (r.qc_status IS NULL OR r.qc_status = 'PASS') -- count only PASS if qc exists
-    WHERE i.po_id = ?
-    GROUP BY i.item_name, i.quantity
-    HAVING remaining_qty > 0
-    ORDER BY i.item_name ASC
-  ");
+  $stmt = $pdo->prepare("\n    SELECT\n      i.id AS po_item_id,\n      i.item_id AS item_id,\n      i.item_name AS item_name,\n      i.quantity  AS po_qty,\n      COALESCE(SUM(r.quantity_received), 0) AS received_qty,\n      (i.quantity - COALESCE(SUM(r.quantity_received), 0)) AS remaining_qty\n    FROM purchase_order_items i\n    LEFT JOIN receiving r\n      ON r.po_id = i.po_id\n     AND r.item_name = i.item_name\n     AND (r.qc_status IS NULL OR r.qc_status = 'PASS')\n    WHERE i.po_id = ?\n    GROUP BY i.id, i.item_id, i.item_name, i.quantity\n    HAVING remaining_qty > 0\n    ORDER BY i.item_name ASC, i.id ASC\n  ");
   $stmt->execute([$poId]);
 
   $items = $stmt->fetchAll(PDO::FETCH_ASSOC);

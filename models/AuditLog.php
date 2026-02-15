@@ -17,22 +17,25 @@ class AuditLog {
     ?array $newValues
   ): void {
     $stmt = $this->pdo->prepare("
-      INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, old_values, new_values, ip_address, user_agent)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO audit_logs (user_id, action, entity_type, entity_id, meta)
+      VALUES (?, ?, ?, ?, ?)
     ");
 
     $ip = $_SERVER['REMOTE_ADDR'] ?? null;
     $ua = $_SERVER['HTTP_USER_AGENT'] ?? null;
+    $meta = [
+      'old_values' => $oldValues,
+      'new_values' => $newValues,
+      'ip_address' => $ip,
+      'user_agent' => $ua
+    ];
 
     $stmt->execute([
       $actorUserId,
       $action,
       $entityType,
       $entityId,
-      $oldValues ? json_encode($oldValues) : null,
-      $newValues ? json_encode($newValues) : null,
-      $ip,
-      $ua
+      json_encode($meta)
     ]);
   }
 }

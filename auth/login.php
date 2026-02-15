@@ -1,42 +1,47 @@
 <?php
-session_start();
 require "../config/database.php";
 require "../config/flash.php";
 require "../config/app.php";
 
 $base = app_base_url();
+if ($base === '') {
+    $docRoot = realpath($_SERVER['DOCUMENT_ROOT'] ?? '') ?: '';
+    $appRoot = realpath(dirname(__DIR__)) ?: '';
+    if ($docRoot !== '' && $appRoot !== '' && str_starts_with(strtolower(str_replace('\\','/', $appRoot)), strtolower(str_replace('\\','/', $docRoot)))) {
+        $relative = trim(str_replace('\\','/', substr($appRoot, strlen($docRoot))), '/');
+        $base = $relative === '' ? '' : ('/' . $relative);
+    }
+}
+
+function role_redirect_target(string $base, string $role): string
+{
+    switch ($role) {
+        case 'project':
+        case 'project_staff':
+            return $base . "/views/project/projects.php";
+        case 'procurement':
+        case 'procurement_staff':
+            return $base . "/views/procurement/procurement.php?tab=purchase-orders";
+        case 'warehouse':
+        case 'warehouse_staff':
+            return $base . "/views/warehousing/inventory.php";
+        case 'mro':
+        case 'mro_staff':
+            return $base . "/views/mro/maintenance.php";
+        case 'asset':
+        case 'asset_staff':
+            return $base . "/views/asset/asset.php?tab=registry";
+        case 'admin':
+        case 'manager':
+        case 'staff':
+        default:
+            return $base . "/views/dashboard.php";
+    }
+}
 
 if (isset($_SESSION['user'])) {
     $role = $_SESSION['user']['role'] ?? 'staff';
-
-switch ($role) {
-  case 'admin':
-  case 'manager':
-  case 'staff':
-    header("Location: $base/index.php");
-    break;
-
-  case 'project':
-    header("Location: $base/views/projects.php");
-    break;
-
-  case 'procurement':
-    header("Location: $base/views/purchase_orders.php");
-    break;
-
-  case 'warehouse':
-    header("Location: $base/views/inventory.php");
-    break;
-
-  case 'mro':
-    header("Location: $base/views/maintenance.php");
-    break;
-
-  case 'asset':
-  default:
-    header("Location: $base/index.php");
-    break;
-}
+    header("Location: " . role_redirect_target($base, $role));
     exit;
 }
 
@@ -51,7 +56,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($user && password_verify($password, $user['password'])) {
         $_SESSION['user'] = $user;
         set_flash('success', 'Welcome back, ' . $user['fullname'] . '!');
-        header("Location: $base/index.php");
+        $role = $user['role'] ?? 'staff';
+        header("Location: " . role_redirect_target($base, $role));
         exit;
     } else {
         set_flash('error', 'Invalid email or password.');
@@ -72,17 +78,19 @@ $error   = get_flash('error');
     <title>byaHERO - Login</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="<?= $base ?>/assets/css/login-styles.css">
-    <link rel="stylesheet" href="<?= $base ?>/assets/css/design.css">
+    <link rel="stylesheet" href="<?= $base ?>/assets/css/base.css">
+    <link rel="stylesheet" href="<?= $base ?>/assets/css/layout.css">
+    <link rel="stylesheet" href="<?= $base ?>/assets/css/components.css">
+    <link rel="stylesheet" href="<?= $base ?>/assets/css/modules/login.css">
+    <link rel="stylesheet" href="<?= $base ?>/assets/css/responsive.css">
+
   </head>
 
 <body class="login-page">
     <div class="login-container">
         <section class="promo-section">
             <div class="logo-area">
-                <div class="sidebar-header">
-    <img src="<?= $base ?>/assets/logo1.png" alt="Logo" class="logo-icon" style="width:60px;height:60px;object-fit:contain;border-radius:3px;">
-  </div>
+                <img src="<?= $base ?>/assets/logo.png" alt="TNVS Logo" class="logo-img">
                 <div>
                     <h1>byaHERO</h1>
                     <p>Logistics 1</p>
@@ -116,7 +124,19 @@ $error   = get_flash('error');
             <h3 class="welcome-text">Welcome back</h3>
             <p class="subtitle">Sign in to access your TNVS dashboard</p>
 
-            <form class="login-form" method="POST" action="">
+            <?php if ($success): ?>
+              <div role="alert" style="margin-bottom:12px; padding:10px 12px; border-radius:10px; background:rgba(0,230,118,0.12); border:1px solid rgba(0,230,118,0.45); color:#c8ffd6; font-size:0.92rem;">
+                <?= htmlspecialchars($success) ?>
+              </div>
+            <?php endif; ?>
+
+            <?php if ($error): ?>
+              <div role="alert" style="margin-bottom:12px; padding:10px 12px; border-radius:10px; background:rgba(255,82,82,0.14); border:1px solid rgba(255,82,82,0.5); color:#ffd5d5; font-size:0.92rem;">
+                <?= htmlspecialchars($error) ?>
+              </div>
+            <?php endif; ?>
+
+            <form class="login-form" method="POST" action="<?= $base ?>/auth/login.php">
               <label for="email">Email</label>
               <div class="input-group">
                 <i class="fas fa-envelope"></i>
@@ -250,7 +270,7 @@ $error   = get_flash('error');
         <span>Sent successfully</span>
     </div>
 
-    <script src="<?= $base ?>/assets/js/login-script.js?v=2"></script>
+    <script src="<?= $base ?>/assets/js/login-script.js?v=4"></script>
 
 </body>
 

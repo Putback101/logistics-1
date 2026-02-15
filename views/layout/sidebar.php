@@ -8,11 +8,32 @@ $role  = $_SESSION['user']['role'] ?? 'guest';
 $name  = $_SESSION['user']['fullname'] ?? 'User';
 $email = $_SESSION['user']['email'] ?? '';
 
-/** Role helper */
+if (!function_exists('expand_roles')) {
+  function expand_roles(array $allowed): array {
+    $aliases = [
+      'procurement' => ['procurement_staff'],
+      'project' => ['project_staff'],
+      'mro' => ['mro_staff'],
+      'warehouse' => ['warehouse_staff'],
+    ];
+
+    $out = $allowed;
+    foreach ($allowed as $r) {
+      if (isset($aliases[$r])) {
+        foreach ($aliases[$r] as $a) {
+          $out[] = $a;
+        }
+      }
+    }
+
+    return array_values(array_unique($out));
+  }
+}
+
 if (!function_exists('can')) {
   function can(string $role, array $allowed): bool {
     if ($role === 'admin') return true;
-    return in_array($role, $allowed, true);
+    return in_array($role, expand_roles($allowed), true);
   }
 }
 
@@ -23,7 +44,6 @@ if (!function_exists('is_active')) {
   }
 }
 
-/** Grouped active helpers for dropdown parents */
 if (!function_exists('any_active')) {
   function any_active(string $uri, array $needles): bool {
     foreach ($needles as $n) {
@@ -33,105 +53,94 @@ if (!function_exists('any_active')) {
   }
 }
 ?>
-<link rel="stylesheet" href="<?= $base ?>/assets/css/design.css">
-<!-- Hamburger should be a sibling of sidebar/topbar for CSS/JS to work -->
+<link rel="stylesheet" href="<?= $base ?>/assets/css/layout.css">
 <button class="hamburger" id="hamburger"><i class="fas fa-bars"></i></button>
 
 <nav class="sidebar collapsed" id="sidebar">
-  <!-- Sidebar Header -->
   <div class="sidebar-header">
-    <div class="logo-wrapper">
-      <img src="<?= $base ?>/assets/logo1.png" alt="Logo" class="logo-icon">
-      <span class="logo-text">byaHERO</span>
+    <div class="sidebar-brand">
+      <img src="<?= $base ?>/assets/logo.png" alt="ByaHERO Logo" class="logo-img">
+      <h2>ByaHERO</h2>
     </div>
-    <button class="sidebar-close" id="sidebarClose"><i class="bi bi-x-lg"></i></button>
   </div>
 
-  <!-- Navigation List -->
   <ul class="nav-list">
-    <!-- DASHBOARD -->
     <li class="nav-item">
-      <a class="nav-link no-green <?= is_active($uri, '/index.php') || is_active($uri, '/views/dashboard.php') ? 'active' : '' ?>"
+      <a class="nav-link no-green <?= is_active($uri, '/index.php') || is_active($uri, '/views/dashboard.php') ? 'active' : '' ?>" data-tooltip="Dashboard"
          href="<?= $base ?>/views/dashboard.php">
-        <i class="bi bi-speedometer2"></i>
+        <i class="fas fa-home"></i>
         <span class="nav-label">Dashboard</span>
       </a>
     </li>
 
-    <!-- PROCUREMENT MODULE -->
-    <?php if (can($role, ['admin', 'manager', 'procurement'])): ?>
+    <?php if (can($role, ['manager', 'procurement_staff'])): ?>
       <li class="nav-item">
-        <a class="nav-link"
-           href="<?= $base ?>/views/procurement.php">
-          <i class="bi bi-bag-check"></i>
+        <a class="nav-link" data-tooltip="Procurement"
+           href="<?= $base ?>/views/procurement/procurement.php">
+          <i class="fas fa-dolly-flatbed"></i>
           <span class="nav-label">Procurement</span>
         </a>
       </li>
     <?php endif; ?>
 
-    <!-- PROJECTS MODULE -->
-    <?php if (can($role, ['admin', 'manager', 'project'])): ?>
+    <?php if (can($role, ['manager', 'project_staff'])): ?>
       <li class="nav-item">
-        <a class="nav-link"
-           href="<?= $base ?>/views/projects.php">
-          <i class="bi bi-diagram-3"></i>
+        <a class="nav-link" data-tooltip="Project Management"
+           href="<?= $base ?>/views/project/projects.php">
+          <i class="fas fa-project-diagram"></i>
           <span class="nav-label">Project Management</span>
         </a>
       </li>
     <?php endif; ?>
 
-    <!-- ASSETS MODULE -->
-    <?php if (can($role, ['admin', 'manager', 'asset'])): ?>
+    <?php if (can($role, ['manager', 'asset'])): ?>
       <li class="nav-item">
-        <a class="nav-link"
-           href="<?= $base ?>/views/fleet.php">
-          <i class="bi bi-box-seam"></i>
+        <a class="nav-link" data-tooltip="Asset Management"
+           href="<?= $base ?>/views/asset/asset.php?tab=registry">
+          <i class="fas fa-boxes"></i>
           <span class="nav-label">Asset Management</span>
         </a>
       </li>
     <?php endif; ?>
 
-    <!-- MRO MODULE -->
-    <?php if (can($role, ['admin', 'manager', 'mro'])): ?>
+    <?php if (can($role, ['manager', 'mro_staff'])): ?>
       <li class="nav-item">
-        <a class="nav-link"
-           href="<?= $base ?>/views/maintenance.php">
-          <i class="bi bi-wrench"></i>
+        <a class="nav-link" data-tooltip="MRO"
+           href="<?= $base ?>/views/mro/maintenance.php">
+          <i class="fas fa-tools"></i>
           <span class="nav-label">MRO</span>
         </a>
       </li>
     <?php endif; ?>
 
-    <!-- WAREHOUSING MODULE -->
-    <?php if (can($role, ['admin', 'manager', 'warehouse'])): ?>
+    <?php if (can($role, ['manager', 'warehouse_staff'])): ?>
       <li class="nav-item">
-        <a class="nav-link"
-           href="<?= $base ?>/views/inventory.php">
-          <i class="bi bi-building"></i>
+        <a class="nav-link" data-tooltip="Warehousing"
+           href="<?= $base ?>/views/warehousing/inventory.php">
+          <i class="fas fa-warehouse"></i>
           <span class="nav-label">Warehousing</span>
         </a>
       </li>
     <?php endif; ?>
-    <li class="nav-separator" aria-hidden="true"></li>
-  </ul>
 
-  <!-- Sidebar Footer (Settings) -->
-  <?php if ($role === 'admin'): ?>
-    <div class="sidebar-footer">
+    <li class="nav-separator" aria-hidden="true"></li>
+
+    <?php if ($role === 'admin'): ?>
       <li class="nav-item">
-          <a class="nav-link no-green <?= is_active($uri, '/views/users.php') ? 'active' : '' ?>"
-            href="<?= $base ?>/views/users.php">
-          <i class="bi bi-people"></i>
+        <a class="nav-link no-green <?= is_active($uri, '/views/users.php') ? 'active' : '' ?>" data-tooltip="Users"
+           href="<?= $base ?>/views/users.php">
+          <i class="fas fa-user"></i>
           <span class="nav-label">Users</span>
         </a>
       </li>
       <li class="nav-item">
-          <a class="nav-link no-green <?= is_active($uri, '/views/audit_logs.php') ? 'active' : '' ?>"
-            href="<?= $base ?>/views/audit_logs.php">
-          <i class="bi bi-clock-history"></i>
+        <a class="nav-link no-green <?= is_active($uri, '/views/audit_logs.php') ? 'active' : '' ?>" data-tooltip="Audit Logs"
+           href="<?= $base ?>/views/audit_logs.php">
+          <i class="fas fa-history"></i>
           <span class="nav-label">Audit Logs</span>
         </a>
       </li>
-    </div>
-  <?php endif; ?>
+    <?php endif; ?>
+  </ul>
 </nav>
+<div class="sidebar-backdrop" id="sidebarBackdrop"></div>

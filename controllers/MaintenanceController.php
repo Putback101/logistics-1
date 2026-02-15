@@ -2,14 +2,24 @@
 require "../config/auth.php";
 require "../config/database.php";
 require "../config/flash.php";
+require "../config/permissions.php";
 require "../models/Maintenance.php";
 
 requireLogin();
-requireRole(['admin','manager','mro']);
+requireRole(['admin','manager','mro_staff']);
+
+$userRole = $_SESSION['user']['role'] ?? '';
+$canAdd = hasPermission($userRole, 'mro', 'add');
 
 $m = new Maintenance($pdo);
 
 if (isset($_POST['add'])) {
+  if (!$canAdd) {
+    http_response_code(403);
+    set_flash('error', 'You are not allowed to add maintenance records.');
+    header("Location: ../views/mro/maintenance.php"); exit;
+  }
+
   $fleetId = $_POST['fleet_id'] ?? '';
   $assetId = $_POST['asset_id'] ?? '';
   $type = $_POST['type'] ?? 'Maintenance';
@@ -22,7 +32,7 @@ if (isset($_POST['add'])) {
 
   if ((!$hasFleet && !$hasAsset) || $desc === '') {
     set_flash('error', 'Select a Fleet OR an Asset, and provide a description.');
-    header("Location: ../views/maintenance.php"); exit;
+    header("Location: ../views/mro/maintenance.php"); exit;
   }
 
   if ($hasFleet) {
@@ -38,8 +48,9 @@ if (isset($_POST['add'])) {
   }
 
   set_flash('success', 'Maintenance/Repair logged successfully.');
-  header("Location: ../views/maintenance.php"); exit;
+  header("Location: ../views/mro/maintenance.php"); exit;
 }
 
-header("Location: ../views/maintenance.php");
+header("Location: ../views/mro/maintenance.php");
 exit;
+

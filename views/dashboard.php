@@ -1,17 +1,18 @@
 <?php
 require_once __DIR__ . "/../config/auth.php";
 require_once __DIR__ . "/../config/database.php";
+require_once __DIR__ . "/../config/app.php";
 require_once __DIR__ . "/../models/Dashboard.php";
 require_once __DIR__ . "/../models/DashboardCharts.php";
 
 requireLogin();
+$base = app_base_url();
 
 $dash = new Dashboard($pdo);
 $charts = new DashboardCharts($pdo);
-$userRole = $_SESSION['user']['role'] ?? 'staff';
+$userRole = $_SESSION['user']['role'] ?? '';
 $userName = $_SESSION['user']['fullname'] ?? 'User';
 
-// Get role-based stats
 $fleetStats = $dash->getFleetStats();
 $procStats = $dash->getProcurementStats();
 $poStats = $dash->getPurchaseOrderStats();
@@ -20,412 +21,295 @@ $projectStats = $dash->getProjectStats();
 $maintenanceStats = $dash->getMaintenanceStats();
 $recentActivities = $dash->getRecentActivities(5, $userRole);
 $pendingTasks = $dash->getPendingTasks($userRole);
+if (!function_exists('time_ago_label')) {
+    function time_ago_label($datetime)
+    {
+        $ts = strtotime((string)$datetime);
+        if (!$ts) {
+            return '-';
+        }
 
-// Prepare KPI card data based on role
+        $diff = time() - $ts;
+        if ($diff < 0) {
+            $diff = 0;
+        }
+
+        if ($diff < 2) {
+            return 'just now';
+        }
+
+        if ($diff < 60) {
+            $v = (int)$diff;
+            return $v . ' second' . ($v !== 1 ? 's' : '') . ' ago';
+        }
+
+        if ($diff < 3600) {
+            $v = (int)floor($diff / 60);
+            return $v . ' minute' . ($v !== 1 ? 's' : '') . ' ago';
+        }
+
+        if ($diff < 86400) {
+            $v = (int)floor($diff / 3600);
+            return $v . ' hour' . ($v !== 1 ? 's' : '') . ' ago';
+        }
+
+        if ($diff < 604800) {
+            $v = (int)floor($diff / 86400);
+            return $v . ' day' . ($v !== 1 ? 's' : '') . ' ago';
+        }
+
+        return date('M d, Y', $ts);
+    }
+}
+
+if (!function_exists('pending_task_url')) {
+    function pending_task_url($taskRow, $base)
+    {
+        $task = (string)($taskRow['task'] ?? '');
+        $id = (int)($taskRow['ref_id'] ?? 0);
+
+        switch ($task) {
+            case 'Approve Request':
+            case 'Review Procurement':
+                return $id > 0
+                    ? $base . '/views/procurement/procurement.php?tab=purchase-orders&edit_request_id=' . $id
+                    : $base . '/views/procurement/procurement.php?tab=approvals';
+            case 'Receive Stock':
+                return $id > 0
+                    ? $base . '/views/warehousing/inventory.php?po_id=' . $id
+                    : $base . '/views/warehousing/inventory.php';
+            case 'Start Task':
+                return $id > 0
+                    ? $base . '/views/project/projects.php?tab=scheduling&task_id=' . $id
+                    : $base . '/views/project/projects.php?tab=scheduling';
+            case 'Perform Maintenance':
+                return $id > 0
+                    ? $base . '/views/mro/maintenance.php?tab=maintenance&log_id=' . $id
+                    : $base . '/views/mro/maintenance.php?tab=maintenance';
+            default:
+                return '#';
+        }
+    }
+}
 $kpiCards = [];
-switch($userRole) {
+switch ($userRole) {
     case 'admin':
+    case 'manager':
+        $projectOngoing = (int)($projectStats['Ongoing'] ?? 0);
+        $projectPlanned = (int)($projectStats['Planned'] ?? 0);
         $kpiCards = [
-            ['icon' => 'bi-truck-front', 'label' => 'Total Fleet', 'value' => $dash->countFleet(), 'detail' => 'vehicles managed'],
-            ['icon' => 'bi-bag-check', 'label' => 'Procurement', 'value' => $dash->countProcurement(), 'detail' => 'requests'],
-            ['icon' => 'bi-box-seam', 'label' => 'Inventory', 'value' => $dash->countInventory(), 'detail' => 'stock items'],
-            ['icon' => 'bi-people', 'label' => 'Users', 'value' => $dash->countUsers(), 'detail' => 'team members']
+            [
+                'icon' => 'fas fa-dolly-flatbed',
+                'label' => 'Procurement',
+                'value' => (int)($procStats['Pending'] ?? 0),
+                'detail' => 'pending requests',
+                'href' => $base . '/views/procurement/procurement.php',
+            ],
+            [
+                'icon' => 'fas fa-project-diagram',
+                'label' => 'Project Management',
+                'value' => $projectOngoing,
+                'detail' => $projectPlanned . ' planned projects',
+                'href' => $base . '/views/project/projects.php',
+            ],
+            [
+                'icon' => 'fas fa-boxes',
+                'label' => 'Asset Management',
+                'value' => (int)$dash->countAssets(),
+                'detail' => 'registered assets',
+                'href' => $base . '/views/asset/asset.php?tab=registry',
+            ],
+            [
+                'icon' => 'fas fa-tools',
+                'label' => 'MRO',
+                'value' => (int)($maintenanceStats['total'] ?? 0),
+                'detail' => 'maintenance logs (30d)',
+                'href' => $base . '/views/mro/maintenance.php',
+            ],
+            [
+                'icon' => 'fas fa-warehouse',
+                'label' => 'Warehousing',
+                'value' => (int)($poStats['Sent'] ?? 0),
+                'detail' => 'POs waiting receipt',
+                'href' => $base . '/views/warehousing/inventory.php',
+            ],
         ];
         break;
-    case 'procurement':
+    case 'procurement_staff':
         $kpiCards = [
-            ['icon' => 'bi-hourglass-split', 'label' => 'Pending', 'value' => $procStats['Pending'] ?? 0, 'detail' => 'requests to review'],
-            ['icon' => 'bi-check-circle', 'label' => 'Approved', 'value' => $procStats['Approved'] ?? 0, 'detail' => 'in progress'],
-            ['icon' => 'bi-bag-check', 'label' => 'Purchase Orders', 'value' => $poStats['Approved'] ?? 0, 'detail' => 'awaiting send'],
+            ['icon' => 'fas fa-hourglass-half', 'label' => 'Pending', 'value' => $procStats['Pending'] ?? 0, 'detail' => 'requests to review'],
+            ['icon' => 'fas fa-check-circle', 'label' => 'Approved', 'value' => $procStats['Approved'] ?? 0, 'detail' => 'in progress'],
+            ['icon' => 'fas fa-shopping-bag', 'label' => 'Purchase Orders', 'value' => $poStats['Approved'] ?? 0, 'detail' => 'awaiting send'],
         ];
         break;
-    case 'warehouse':
+    case 'warehouse_staff':
         $kpiCards = [
-            ['icon' => 'bi-box-seam', 'label' => 'Total Stock', 'value' => $invStats['total'] ?? 0, 'detail' => 'inventory items'],
-            ['icon' => 'bi-exclamation-triangle', 'label' => 'Low Stock', 'value' => $invStats['low_stock'] ?? 0, 'detail' => 'below minimum'],
-            ['icon' => 'bi-arrow-down-right', 'label' => 'Receiving', 'value' => $poStats['Sent'] ?? 0, 'detail' => 'items to receive'],
+            ['icon' => 'fas fa-box-open', 'label' => 'Total Stock', 'value' => $invStats['total'] ?? 0, 'detail' => 'inventory items'],
+            ['icon' => 'fas fa-exclamation-triangle', 'label' => 'Low Stock', 'value' => $invStats['low_stock'] ?? 0, 'detail' => 'below minimum'],
+            ['icon' => 'fas fa-truck-loading', 'label' => 'Receiving', 'value' => $poStats['Sent'] ?? 0, 'detail' => 'items to receive'],
         ];
         break;
-    case 'project':
+    case 'project_staff':
         $kpiCards = [
-            ['icon' => 'bi-diagram-3', 'label' => 'Active Projects', 'value' => $projectStats['Active'] ?? 0, 'detail' => 'ongoing'],
-            ['icon' => 'bi-list-check', 'label' => 'Tasks', 'value' => $projectStats['Pending'] ?? 0, 'detail' => 'pending tasks'],
-            ['icon' => 'bi-check2-square', 'label' => 'Completed', 'value' => $projectStats['Completed'] ?? 0, 'detail' => 'this month'],
+            ['icon' => 'fas fa-project-diagram', 'label' => 'Active Projects', 'value' => $projectStats['Ongoing'] ?? 0, 'detail' => 'ongoing'],
+            ['icon' => 'fas fa-tasks', 'label' => 'Tasks', 'value' => count($pendingTasks), 'detail' => 'pending tasks'],
+            ['icon' => 'fas fa-check-square', 'label' => 'Completed', 'value' => $projectStats['Completed'] ?? 0, 'detail' => 'this month'],
         ];
         break;
-    case 'mro':
+    case 'mro_staff':
         $kpiCards = [
-            ['icon' => 'bi-wrench', 'label' => 'Maintenance', 'value' => $maintenanceStats['total'] ?? 0, 'detail' => 'last 30 days'],
-            ['icon' => 'bi-truck-front', 'label' => 'In Maintenance', 'value' => $fleetStats['Maintenance'] ?? 0, 'detail' => 'vehicles'],
-            ['icon' => 'bi-check-circle', 'label' => 'Available', 'value' => $fleetStats['Available'] ?? 0, 'detail' => 'ready to use'],
+            ['icon' => 'fas fa-wrench', 'label' => 'Maintenance', 'value' => $maintenanceStats['total'] ?? 0, 'detail' => 'last 30 days'],
+            ['icon' => 'fas fa-truck', 'label' => 'In Maintenance', 'value' => $fleetStats['Maintenance'] ?? 0, 'detail' => 'vehicles'],
+            ['icon' => 'fas fa-check-circle', 'label' => 'Available', 'value' => $fleetStats['Available'] ?? 0, 'detail' => 'ready to use'],
         ];
         break;
     default:
         $kpiCards = [
-            ['icon' => 'bi-truck-front', 'label' => 'Fleet', 'value' => $dash->countFleet(), 'detail' => 'total vehicles'],
-            ['icon' => 'bi-bag-check', 'label' => 'Procurement', 'value' => $dash->countProcurement(), 'detail' => 'requests'],
-            ['icon' => 'bi-box-seam', 'label' => 'Inventory', 'value' => $dash->countInventory(), 'detail' => 'stock items'],
+            ['icon' => 'fas fa-truck', 'label' => 'Fleet', 'value' => $dash->countFleet(), 'detail' => 'total vehicles'],
+            ['icon' => 'fas fa-shopping-bag', 'label' => 'Procurement', 'value' => $dash->countProcurement(), 'detail' => 'requests'],
+            ['icon' => 'fas fa-box-open', 'label' => 'Inventory', 'value' => $dash->countInventory(), 'detail' => 'stock items'],
         ];
 }
 ?>
 
 <?php require_once __DIR__ . "/layout/header.php"; ?>
-<link rel="stylesheet" href="<?= $base ?>/assets/css/style.css">
-<style>
-.dashboard-header {
-  margin-bottom: 2rem;
-}
-
-.welcome-text {
-  font-size: 1.75rem;
-  font-weight: 600;
-  color: #fff;
-  margin-bottom: 0.5rem;
-}
-
-.welcome-subtext {
-  color: #a0aec0;
-  font-size: 0.95rem;
-}
-
-.kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-.kpi-card {
-  background: #1a202c;
-  border: 1px solid #2d3748;
-  border-radius: 0.75rem;
-  padding: 1.5rem;
-  transition: all 0.3s ease;
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
-}
-
-.kpi-card:hover {
-  border-color: #48bb78;
-  box-shadow: 0 0 20px rgba(72, 187, 120, 0.1);
-  transform: translateY(-2px);
-}
-
-.kpi-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, #48bb78, #38a169);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.kpi-card:hover::before {
-  opacity: 1;
-}
-
-.kpi-icon {
-  font-size: 2rem;
-  color: #48bb78;
-  margin-bottom: 1rem;
-}
-
-.kpi-value {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: #fff;
-  margin-bottom: 0.5rem;
-  line-height: 1;
-}
-
-.kpi-detail {
-  color: #a0aec0;
-  font-size: 0.85rem;
-}
-
-.kpi-label {
-  color: #cbd5e0;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 0.75rem;
-  font-weight: 600;
-}
-
-.content-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-@media (max-width: 1200px) {
-  .content-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.section-card {
-  background: #1a202c;
-  border: 1px solid #2d3748;
-  border-radius: 0.75rem;
-  padding: 1.5rem;
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid #2d3748;
-}
-
-.section-title {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #fff;
-  margin: 0;
-}
-
-.section-subtitle {
-  color: #a0aec0;
-  font-size: 0.8rem;
-}
-
-.activity-list, .task-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.activity-item, .task-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 0;
-  border-bottom: 1px solid #2d3748;
-  color: #e2e8f0;
-  font-size: 0.95rem;
-}
-
-.activity-item:last-child, .task-item:last-child {
-  border-bottom: none;
-}
-
-.activity-type {
-  display: inline-block;
-  background: rgba(72, 187, 120, 0.1);
-  color: #48bb78;
-  padding: 0.25rem 0.75rem;
-  border-radius: 0.25rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  margin-right: 0.75rem;
-}
-
-.activity-time {
-  color: #a0aec0;
-  font-size: 0.85rem;
-  white-space: nowrap;
-}
-
-.task-priority {
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: 0.25rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.priority-high {
-  background: rgba(245, 101, 101, 0.1);
-  color: #f56565;
-}
-
-.priority-medium {
-  background: rgba(237, 137, 54, 0.1);
-  color: #ed8936;
-}
-
-.priority-low {
-  background: rgba(72, 187, 120, 0.1);
-  color: #48bb78;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 2rem 1rem;
-  color: #a0aec0;
-}
-
-.empty-state-icon {
-  font-size: 2.5rem;
-  margin-bottom: 0.5rem;
-  opacity: 0.5;
-}
-</style>
-
 <?php require_once __DIR__ . "/layout/sidebar.php"; ?>
 <?php require_once __DIR__ . "/layout/topbar.php"; ?>
-<main class="main-content">
-  <div class="content-area">
-    
-    <!-- WELCOME HEADER -->
-    <div class="dashboard-header" style="border-left: 5px solid #48bb78; padding-left: 1.5rem; margin-bottom: 2rem;">
-      <div class="welcome-text">Welcome back, <?= htmlspecialchars($userName) ?>!</div>
-      <div class="welcome-subtext">Here's what's happening with your logistics operations today.</div>
+<main class="main-content dashboard-page">
+  <div class="content-area dashboard-overview">
+    <div class="module-header">
+      <div>
+        <h1>Welcome back, <?= htmlspecialchars($userName) ?>!</h1>
+        <p>Here's what's happening with your logistics operations today.</p>
+      </div>
     </div>
 
-    <!-- KPI CARDS (4 column layout) -->
-    <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));">
+    <div class="dashboard-grid">
       <?php foreach ($kpiCards as $card): ?>
-      <div class="kpi-card">
-        <div class="kpi-label"><?= htmlspecialchars($card['label']) ?></div>
-        <div style="display: flex; align-items: center; gap: 1rem; margin-top: 0.5rem;">
-          <div class="kpi-icon" style="margin-bottom: 0;">
-            <i class="bi <?= $card['icon'] ?>"></i>
-          </div>
-          <div>
-            <div class="kpi-value" style="margin-bottom: 0;"><?= $card['value'] ?></div>
-            <div class="kpi-detail"><?= htmlspecialchars($card['detail']) ?></div>
-          </div>
+      <?php $cardHref = $card['href'] ?? null; ?>
+      <<?= $cardHref ? 'a' : 'div' ?> class="stat-card text-decoration-none text-reset"<?= $cardHref ? ' href="' . htmlspecialchars($cardHref) . '"' : '' ?>>
+        <div class="card-header">
+          <i class="<?= htmlspecialchars($card['icon']) ?> card-icon"></i>
+          <span class="card-title"><?= htmlspecialchars($card['label']) ?></span>
         </div>
-      </div>
+        <div class="card-value"><?= htmlspecialchars((string)$card['value']) ?></div>
+        <div class="card-footer"><?= htmlspecialchars($card['detail']) ?></div>
+      </<?= $cardHref ? 'a' : 'div' ?>>
       <?php endforeach; ?>
     </div>
 
-    <!-- RECENT ACTIVITY & QUICK ACTIONS -->
-    <div class="content-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 2rem;">
-      <!-- RECENT ACTIVITY -->
-      <div class="section-card">
+    <div class="content-grid-2 mt-4">
+      <div class="card">
         <div class="section-header">
-          <div>
-            <h5 class="section-title">
-              <i class="bi bi-clock-history" style="margin-right: 0.5rem; color: #48bb78;"></i>
-              Recent Activity
-            </h5>
-          </div>
+          <h3><i class="fas fa-history"></i> Recent Activity</h3>
         </div>
         <?php if (count($recentActivities) > 0): ?>
           <ul class="activity-list">
             <?php foreach ($recentActivities as $activity): ?>
-            <li class="activity-item" style="display: flex; align-items: flex-start; padding: 0.75rem 0; border-bottom: 1px solid #2d3748;">
-              <span style="color: #48bb78; margin-right: 0.75rem; margin-top: 2px; font-size: 1.2rem; line-height: 1;">•</span>
-              <div style="flex: 1;">
-                <div style="font-size: 0.95rem; line-height: 1.4;"><?= htmlspecialchars($activity['description'] ?? 'Activity logged') ?></div>
-              </div>
-              <div class="activity-time" style="white-space: nowrap; margin-left: 1rem; font-size: 0.85rem; color: #a0aec0;"><?= date('M d', strtotime($activity['created_at'])) ?></div>
+            <li>
+              <span class="activity-dot"></span>
+              <span><?= htmlspecialchars($activity['description'] ?? 'Activity logged') ?></span>
+<?php $activityTs = strtotime((string)($activity['created_at'] ?? '')); ?>
+              <small class="ms-auto text-muted js-time-ago" data-ts="<?= (int)$activityTs ?>" title="<?= $activityTs ? date('M d, Y h:i A', $activityTs) : '-' ?>"><?= time_ago_label($activity['created_at']) ?></small>
             </li>
             <?php endforeach; ?>
           </ul>
         <?php else: ?>
-          <div class="empty-state">
-            <div class="empty-state-icon">📭</div>
-            <div>No recent activities</div>
-          </div>
+          <div class="empty-state">No recent activities</div>
         <?php endif; ?>
       </div>
 
-      <!-- QUICK ACTIONS (2x2 grid) -->
-      <div class="section-card">
+      <div class="card">
         <div class="section-header">
-          <h5 class="section-title">
-            <i class="bi bi-lightning-fill" style="margin-right: 0.5rem; color: #48bb78;"></i>
-            Quick Actions
-          </h5>
+          <h3><i class="fas fa-bolt"></i> Quick Actions</h3>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem;">
-          <?php if (in_array($userRole, ['admin', 'procurement'])): ?>
-          <a href="<?= $base ?>/views/procurement.php" class="action-btn" style="padding: 1rem; text-align: left; background: #2d3748; border: 1px solid #4a5568; border-radius: 0.5rem; color: #e2e8f0; text-decoration: none; transition: all 0.3s ease; display: flex; align-items: center; gap: 1rem;">
-            <div style="font-size: 1.75rem; min-width: 2rem; text-align: center;"><i class="bi bi-bag-check" style="color: #48bb78;"></i></div>
-            <div style="font-weight: 600; font-size: 0.95rem;">Procurement</div>
-          </a>
-          <?php endif; ?>
-          
-          <?php if (in_array($userRole, ['admin', 'project'])): ?>
-          <a href="<?= $base ?>/views/projects.php" class="action-btn" style="padding: 1rem; text-align: left; background: #2d3748; border: 1px solid #4a5568; border-radius: 0.5rem; color: #e2e8f0; text-decoration: none; transition: all 0.3s ease; display: flex; align-items: center; gap: 1rem;">
-            <div style="font-size: 1.75rem; min-width: 2rem; text-align: center;"><i class="bi bi-diagram-3" style="color: #48bb78;"></i></div>
-            <div style="font-weight: 600; font-size: 0.95rem;">Projects</div>
+        <div class="quick-actions">
+          <?php if (in_array($userRole, ['admin', 'procurement_staff'], true)): ?>
+          <a href="<?= $base ?>/views/procurement/procurement.php?tab=purchase-orders&open_modal=addProcurementRequestForm&open_modal_title=New%20Request" class="quick-action-btn text-decoration-none">
+            <i class="fas fa-plus-circle"></i>
+            <span>Procurement</span>
           </a>
           <?php endif; ?>
 
-          <?php if (in_array($userRole, ['admin', 'asset'])): ?>
-          <a href="<?= $base ?>/views/fleet.php" class="action-btn" style="padding: 1rem; text-align: left; background: #2d3748; border: 1px solid #4a5568; border-radius: 0.5rem; color: #e2e8f0; text-decoration: none; transition: all 0.3s ease; display: flex; align-items: center; gap: 1rem;">
-            <div style="font-size: 1.75rem; min-width: 2rem; text-align: center;"><i class="bi bi-box-seam" style="color: #48bb78;"></i></div>
-            <div style="font-weight: 600; font-size: 0.95rem;">Assets</div>
+          <?php if (in_array($userRole, ['admin', 'project_staff'], true)): ?>
+          <a href="<?= $base ?>/views/project/projects.php?tab=planning&open_modal=addProjectForm&open_modal_title=Create%20Project" class="quick-action-btn text-decoration-none">
+            <i class="fas fa-folder-plus"></i>
+            <span>Projects</span>
           </a>
           <?php endif; ?>
 
-          <?php if (in_array($userRole, ['admin', 'mro'])): ?>
-          <a href="<?= $base ?>/views/maintenance.php" class="action-btn" style="padding: 1rem; text-align: left; background: #2d3748; border: 1px solid #4a5568; border-radius: 0.5rem; color: #e2e8f0; text-decoration: none; transition: all 0.3s ease; display: flex; align-items: center; gap: 1rem;">
-            <div style="font-size: 1.75rem; min-width: 2rem; text-align: center;"><i class="bi bi-wrench" style="color: #48bb78;"></i></div>
-            <div style="font-weight: 600; font-size: 0.95rem;">MRO</div>
+          <?php if (in_array($userRole, ['admin', 'asset'], true)): ?>
+          <a href="<?= $base ?>/views/asset/asset.php?tab=registry&open_modal=addAssetForm&open_modal_title=Add%20Asset" class="quick-action-btn text-decoration-none">
+            <i class="fas fa-boxes"></i>
+            <span>Assets</span>
           </a>
           <?php endif; ?>
 
-          <?php if (in_array($userRole, ['admin', 'warehouse'])): ?>
-          <a href="<?= $base ?>/views/inventory.php" class="action-btn" style="padding: 1rem; text-align: left; background: #2d3748; border: 1px solid #4a5568; border-radius: 0.5rem; color: #e2e8f0; text-decoration: none; transition: all 0.3s ease; display: flex; align-items: center; gap: 1rem;">
-            <div style="font-size: 1.75rem; min-width: 2rem; text-align: center;"><i class="bi bi-building" style="color: #48bb78;"></i></div>
-            <div style="font-weight: 600; font-size: 0.95rem;">Warehousing</div>
+          <?php if (in_array($userRole, ['admin', 'mro_staff'], true)): ?>
+          <a href="<?= $base ?>/views/mro/maintenance.php?tab=maintenance&open_modal=addMaintenanceForm&open_modal_title=Log%20Maintenance%20%2F%20Repair" class="quick-action-btn text-decoration-none">
+            <i class="fas fa-tools"></i>
+            <span>MRO</span>
+          </a>
+          <?php endif; ?>
+
+          <?php if (in_array($userRole, ['admin', 'warehouse_staff'], true)): ?>
+          <a href="<?= $base ?>/views/warehousing/inventory.php?tab=inventory&open_modal=addReceivingForm&open_modal_title=Record%20Receiving" class="quick-action-btn text-decoration-none">
+            <i class="fas fa-warehouse"></i>
+            <span>Warehousing</span>
           </a>
           <?php endif; ?>
         </div>
       </div>
     </div>
 
-    <!-- PENDING TASKS -->
-    <div class="section-card">
+    <div class="card mt-4">
       <div class="section-header">
-        <h5 class="section-title">
-          <i class="bi bi-list-check" style="margin-right: 0.5rem; color: #48bb78;"></i>
-          Pending Tasks
-        </h5>
+        <h3><i class="fas fa-tasks"></i> Pending Tasks</h3>
       </div>
       <?php if (count($pendingTasks) > 0): ?>
-        <ul class="task-list">
-          <?php foreach ($pendingTasks as $idx => $task): 
+        <ul class="pending-tasks-list">
+          <?php foreach ($pendingTasks as $idx => $task):
             $priorities = ['high', 'high', 'medium', 'medium', 'low'];
             $priority = $priorities[$idx % count($priorities)];
           ?>
-          <li class="task-item">
-            <div style="flex: 1;">
-              <div style="margin-bottom: 0.25rem;"><?= htmlspecialchars($task['task']) ?></div>
-              <div style="color: #a0aec0; font-size: 0.85rem;">Due: <?= date('M d, Y', strtotime($task['due_date'] ?? date('Y-m-d'))) ?></div>
+          <?php $taskKey = sha1(($task['task'] ?? '') . '|' . ($task['due_date'] ?? '') . '|' . $idx); ?>
+          <?php $taskUrl = pending_task_url($task['task'] ?? '', $userRole, $base); ?>
+          <li class="pending-task-item" data-task-key="<?= htmlspecialchars($taskKey) ?>" data-task-url="<?= htmlspecialchars($taskUrl) ?>">
+            <button type="button" class="task-checkbox" aria-label="Mark task complete" aria-pressed="false"></button>
+            <div class="task-content">
+              <div class="task-title"><?= htmlspecialchars($task['task']) ?></div>
+              <div class="task-meta">Due: <?= date('M d, Y', strtotime($task['due_date'] ?? date('Y-m-d'))) ?></div>
             </div>
-            <span class="task-priority priority-<?= $priority ?>"><?= strtoupper($priority) ?></span>
+            <span class="task-priority <?= $priority ?>"><?= strtoupper($priority) ?></span>
           </li>
           <?php endforeach; ?>
         </ul>
       <?php else: ?>
-        <div class="empty-state">
-          <div class="empty-state-icon">✓</div>
-          <div>No pending tasks</div>
-        </div>
+        <div class="empty-state">No pending tasks</div>
       <?php endif; ?>
     </div>
-
   </div>
 </main>
 
-<script>
-  document.querySelectorAll('.action-btn').forEach(btn => {
-    btn.addEventListener('mouseenter', function() {
-      this.style.background = '#374151';
-      this.style.borderColor = '#48bb78';
-    });
-    btn.addEventListener('mouseleave', function() {
-      this.style.background = '#2d3748';
-      this.style.borderColor = '#4a5568';
-    });
-  });
-</script>
-
 <?php require_once __DIR__ . "/layout/footer.php"; ?>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

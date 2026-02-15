@@ -1,0 +1,507 @@
+/* =====================================================
+   RESPONSIVE.CSS - Centralized Media Queries
+   Mobile-First Responsive Design
+   ===================================================== */
+
+/* ========== Breakpoint Reference ========== */
+/*
+   Mobile S:   < 480px  (base styles)
+   Mobile L:   480px+
+   Tablet:     768px+
+   Desktop:    1024px+
+   Desktop L:  1280px+
+   Desktop XL: 1440px+
+*/
+
+/* ========== Mobile Large (480px+) ========== */
+@media (min-width: 480px) {
+
+    /* Search */
+    .search-container {
+        width: 280px;
+    }
+
+    /* Notification dropdown */
+    .notification-menu {
+        width: 320px;
+    }
+
+    /* Profile dropdown */
+    .profile-dropdown {
+        width: 250px;
+    }
+}
+
+/* ========== Tablet (768px+) ========== */
+@media (min-width: 768px) {
+
+    /* Form grids - two columns */
+    .form-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    /* Modal - larger size */
+    .modal {
+        max-width: 550px;
+    }
+
+    /* Search bar */
+    .search-container {
+        width: 320px;
+    }
+
+    /* Detail grids - two columns */
+    .detail-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    /* Dashboard grid adjustments */
+    .dashboard-grid {
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    }
+}
+
+/* ========== Desktop (1025px+) ========== */
+@media (min-width: 1025px) {
+
+    /* Sidebar - show expanded */
+    .sidebar {
+        width: var(--sidebar-width);
+    }
+
+    .sidebar.collapsed {
+        width: var(--sidebar-collapsed);
+    }
+
+    /* Topbar adjusts for collapsed sidebar */
+    .sidebar.collapsed~.topbar {
+        left: var(--sidebar-collapsed);
+    }
+
+    /* Main content adjusts for collapsed sidebar */
+    .sidebar.collapsed~.main-content {
+        margin-left: var(--sidebar-collapsed);
+    }
+
+    /* Hamburger hidden on desktop */
+    .hamburger {
+        display: none;
+    }
+
+    /* Search bar full width */
+    .search-container {
+        width: 380px;
+    }
+
+    /* Dashboard grid - larger cards */
+    .dashboard-grid {
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    }
+}
+
+/* ========== Desktop Large (1280px+) ========== */
+@media (min-width: 1280px) {
+
+    /* Content grids */
+    .content-grid-3 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .content-grid-4 {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+/* ========== Desktop XL (1440px+) ========== */
+/* Content should stretch to full width - no max-width constraint */
+
+/* ========================================== */
+/* ===== TABLET AND BELOW ADJUSTMENTS ===== */
+/* ========================================== */
+
+/* ========== Tablet and Below (max 1024px) ========== */
+@media (max-width: 1024px) {
+
+    /* Tablet: keep collapsed sidebar visible */
+    .sidebar {
+        transform: translateX(0);
+        width: var(--sidebar-collapsed);
+    }
+
+    .sidebar.collapsed {
+        width: var(--sidebar-collapsed);
+    }
+
+    .sidebar.open {
+        transform: none;
+        width: var(--sidebar-width);
+    }
+
+    /* Topbar must stay full-width on smaller screens (no left gap) */
+    .topbar {
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        padding-left: 104px;
+        padding-right: 12px;
+        gap: 12px;
+    }
+
+    /* Main content starts after collapsed rail */
+    .main-content {
+        margin-left: var(--sidebar-collapsed);
+        width: calc(100% - var(--sidebar-collapsed));
+    }
+
+    /* Never shift topbar when sidebar state changes */
+    .sidebar.collapsed~.topbar,
+    .sidebar.open~.topbar {
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+    }
+
+    .sidebar.collapsed~.main-content,
+    .sidebar.open~.main-content,
+    .sidebar:not(.collapsed)~.main-content {
+        margin-left: var(--sidebar-collapsed);
+        width: calc(100% - var(--sidebar-collapsed));
+    }
+
+    /* Replace full search bar with icon in same topbar slot */
+    .search-container {
+        display: none;
+    }
+
+    .mobile-search-trigger {
+        display: inline-flex !important;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: var(--radius-md);
+        background: var(--color-bg-primary);
+        border: 1px solid var(--color-border);
+        color: var(--color-text-primary);
+        position: static;
+        margin-left: 8px;
+        margin-right: 8px;
+    }
+
+    .topbar-actions {
+        margin-left: auto;
+    }
+
+    /* Hamburger visible */
+    #hamburger {
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+/* ========== Mobile (max 768px) ========== */
+@media (max-width: 768px) {
+
+    /* === Sidebar Off-Canvas === */
+    .sidebar {
+        transform: translateX(-100%);
+        width: var(--sidebar-width);
+    }
+
+    .sidebar.collapsed {
+        width: var(--sidebar-width);
+    }
+
+    .sidebar.open {
+        transform: translateX(0);
+    }
+
+    /* Inner hamburger visible */
+    .sidebar-header {
+        justify-content: space-between;
+    }
+
+    #hamburgerInner {
+        display: none !important;
+    }
+
+    /* === Topbar Full Width === */
+    .topbar {
+        left: 0;
+        width: 100%;
+        padding: 0 var(--space-md);
+        justify-content: flex-end;
+    }
+
+    .sidebar.collapsed~.topbar,
+    .sidebar.open~.topbar {
+        left: 0;
+    }
+
+    .search-container {
+        display: none;
+    }
+
+    /* Reduce topbar actions gap */
+    .topbar-actions {
+        margin-left: auto;
+        gap: var(--space-lg);
+    }
+
+    /* === Main Content Full Width === */
+    .main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        padding: var(--space-md);
+        padding-bottom: 80px;
+    }
+
+    .sidebar.collapsed~.main-content,
+    .sidebar:not(.collapsed)~.main-content,
+    .sidebar.open~.main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+    }
+
+    /* Hamburger visible */
+    #hamburger {
+        display: block;
+    }
+
+    /* === Typography Adjustments === */
+    .main-content h1 {
+        font-size: 1.8rem;
+    }
+
+    /* === Grid Adjustments === */
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .content-grid-2,
+    .content-grid-3,
+    .content-grid-4 {
+        grid-template-columns: 1fr;
+    }
+
+    /* Form grids single column */
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .form-grid .full-width {
+        grid-column: span 1;
+    }
+
+    /* === Modal Adjustments === */
+    .modal {
+        max-width: 100%;
+        margin: var(--space-md);
+        max-height: calc(100vh - var(--space-xl));
+    }
+
+    .modal-footer {
+        flex-direction: column;
+    }
+
+    .modal-footer button {
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* Detail grid single column */
+    .detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .detail-item.full-width {
+        grid-column: span 1;
+    }
+
+    /* === Notification Dropdown === */
+    .notification-dropdown {
+        position: static;
+    }
+
+    .notification-menu {
+        width: 96vw;
+        left: 2vw;
+        right: auto;
+        top: var(--topbar-height);
+        max-height: 80vh;
+    }
+
+    /* === Profile Dropdown === */
+    .profile-dropdown {
+        width: 220px;
+        right: -10px;
+    }
+
+    /* === Tables Responsive === */
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .data-table {
+        min-width: 600px;
+    }
+
+    /* === Toolbar === */
+    .toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .toolbar-group {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    /* === Module Header === */
+    .module-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .module-actions {
+        width: 100%;
+    }
+
+    .module-actions .btn-primary {
+        flex: 1;
+        justify-content: center;
+    }
+
+    /* === Tabs Scroll === */
+    .tabs {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        width: 100%;
+    }
+
+    /* === Quick Actions === */
+    .quick-actions {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    /* === Toast Position === */
+    .toast {
+        left: var(--space-md);
+        right: var(--space-md);
+        bottom: var(--space-md);
+    }
+}
+
+/* ========== Small Mobile (max 480px) ========== */
+@media (max-width: 480px) {
+
+    /* Typography */
+    .main-content h1 {
+        font-size: 1.5rem;
+    }
+
+    /* Cards and stats */
+    .stat-card {
+        padding: var(--space-md);
+    }
+
+    .card-value {
+        font-size: 1.5rem;
+    }
+
+    /* Buttons full width */
+    .btn-primary {
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* Topbar actions even tighter */
+    .topbar-actions {
+        gap: var(--space-md);
+    }
+
+    /* Notification/Profile dropdowns */
+    .notification-menu,
+    .profile-dropdown {
+        width: calc(100vw - 30px);
+    }
+
+    /* Module header */
+    .module-header h1 {
+        font-size: 1.4rem;
+    }
+
+    /* Quick actions single column */
+    .quick-actions {
+        grid-template-columns: 1fr;
+    }
+
+    /* Confirmation modal */
+    .confirmation-actions {
+        flex-direction: column;
+    }
+
+    .confirmation-actions button {
+        width: 100%;
+    }
+}
+
+/* ========== Touch Targets ========== */
+@media (hover: none) and (pointer: coarse) {
+
+    /* Ensure minimum 44px touch targets */
+    .btn,
+    .nav-link,
+    .action-btn,
+    .tab,
+    .chip-toggle,
+    .quick-action-btn {
+        min-height: 44px;
+    }
+
+    .action-btn {
+        padding: var(--space-sm) var(--space-md);
+    }
+
+    /* Remove hover effects on touch devices */
+    .stat-card:hover,
+    .card:hover {
+        transform: none;
+    }
+}
+
+/* ========== Print Styles ========== */
+@media print {
+
+    .sidebar,
+    .topbar,
+    .hamburger,
+    .sidebar-backdrop,
+    .modal-overlay {
+        display: none !important;
+    }
+
+    .main-content {
+        margin: 0;
+        padding: 0;
+    }
+
+    body {
+        background: white;
+        color: black;
+    }
+}
+
+/* ========== Reduced Motion ========== */
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}

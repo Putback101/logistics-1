@@ -10,7 +10,6 @@ function badge_class(string $text): string {
     // Procurement statuses
     if ($t === 'pending') return 'bg-secondary';
     if ($t === 'approved') return 'bg-info text-dark';
-    if ($t === 'delivered') return 'bg-success';
 
     return 'bg-light text-dark border';
 }

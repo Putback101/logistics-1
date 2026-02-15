@@ -6,12 +6,16 @@ require "../models/User.php";
 
 requireLogin();
 requireRole(['admin']);
-$allowedRoles = ['admin','manager','procurement','warehouse','mro','asset','project','staff'];
-if (!in_array($_POST['role'] ?? '', $allowedRoles, true)) {
-    set_flash('error', 'Invalid role.');
-    header("Location: ../views/users.php");
-    exit;
-}
+
+$allowedRoles = [
+    'admin',
+    'manager',
+    'procurement_staff',
+    'project_staff',
+    'asset',
+    'mro_staff',
+    'warehouse_staff',
+];
 
 $user = new User($pdo);
 
@@ -20,7 +24,13 @@ if (isset($_POST['add'])) {
     $fullname = trim($_POST['fullname'] ?? '');
     $email    = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
-    $role     = $_POST['role'] ?? 'staff';
+    $role     = $_POST['role'] ?? 'project_staff';
+
+    if (!in_array($role, $allowedRoles, true)) {
+        set_flash('error', 'Invalid role.');
+        header("Location: ../views/users.php");
+        exit;
+    }
 
     if ($fullname === '' || $email === '' || $password === '') {
         set_flash('error', 'Please fill out all fields.');
@@ -48,7 +58,13 @@ if (isset($_POST['update'])) {
     $id       = $_POST['id'] ?? '';
     $fullname = trim($_POST['fullname'] ?? '');
     $email    = trim($_POST['email'] ?? '');
-    $role     = $_POST['role'] ?? 'staff';
+    $role     = $_POST['role'] ?? 'project_staff';
+
+    if (!in_array($role, $allowedRoles, true)) {
+        set_flash('error', 'Invalid role.');
+        header("Location: ../views/users.php");
+        exit;
+    }
 
     if (!ctype_digit((string)$id) || $fullname === '' || $email === '') {
         set_flash('error', 'Invalid data. Please try again.');

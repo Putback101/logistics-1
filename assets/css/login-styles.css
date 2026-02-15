@@ -1,3 +1,5 @@
+/* login-styles.css */
+
 .login-page {
     display: block;
     height: auto;
@@ -10,15 +12,17 @@
     min-height: 100vh;
 }
 
+/* --- Promo Section (Left) --- */
 .promo-section {
     flex: 1;
     display: flex;
     flex-direction: column;
     justify-content: center;
     padding: 80px 100px;
-    background: #121217;
+    background: var(--color-background);
     position: relative;
-    background-image: radial-gradient(circle at 1% 1%, rgba(0, 230, 118, 0.05) 1px, transparent 0);
+    /* Subtle Grid Pattern */
+    background-image: radial-gradient(circle at 1px 1px, rgba(0, 230, 118, 0.05) 1px, transparent 0);
     background-size: 40px 40px;
     border-right: 1px solid var(--color-border);
 }
@@ -29,10 +33,17 @@
     margin-bottom: 40px;
 }
 
+.logo-img {
+    height: 100px;
+    width: auto;
+    margin-right: 15px;
+}
+
 .logo-area h1 {
     font-size: 1.8rem;
     font-weight: 900;
-    margin-bottom: -5px;
+    margin: 0;
+    /* Removed negative margin */
     color: var(--color-text-primary);
 }
 
@@ -70,10 +81,10 @@
 
 .stat-item {
     padding: 20px;
-    background: #1e1e24;
+    background: var(--color-surface);
     border-radius: 12px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
-    border: 1px solid var(--coloe-border);
+    box-shadow: 0 4px 10px var(--color-shadow);
+    border: 1px solid var(--color-border);
 }
 
 .stat-value {
@@ -89,13 +100,14 @@
     margin: 0;
 }
 
+/* --- Login Form Section (Right) --- */
 .login-form-section {
     width: 450px;
     padding: 80px 50px;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    background: #1e1e24;
+    background: var(--color-surface);
 }
 
 .welcome-text {
@@ -121,18 +133,18 @@
 }
 
 .input-group {
-    background: #121217;
+    background: var(--color-background);
     padding: 10px 15px;
     border-radius: 8px;
     display: flex;
     align-items: center;
-    border: 1px solid var(--coloe-border);
+    border: 1px solid var(--color-border);
     transition: all 0.3s;
 }
 
 .input-group:focus-within {
     border-color: var(--color-neon-accent);
-    box-shadow: 0 0 10px rgba(0, 230, 118, 0.4);
+    box-shadow: 0 0 10px var(--color-neon-glow);
 }
 
 .input-group i {
@@ -182,6 +194,7 @@
     color: var(--color-neon-accent);
 }
 
+/* Checkbox Customization */
 .checkbox-container {
     display: block;
     position: relative;
@@ -207,8 +220,8 @@
     left: 0;
     height: 16px;
     width: 16px;
-    background-color: #121217;
-    border: 1px solid var(--coloe-border);
+    background-color: var(--color-background);
+    border: 1px solid var(--color-border);
     border-radius: 4px;
 }
 
@@ -236,7 +249,7 @@
     top: 1px;
     width: 4px;
     height: 9px;
-    border: solid #1e1e24;
+    border: solid var(--color-surface);
     border-width: 0 2px 2px 0;
     transform: rotate(45deg);
 }
@@ -246,6 +259,7 @@
     padding: 15px 20px;
     background: var(--color-neon-accent);
     color: #1e1e24;
+    /* Keep dark text for contrast on bright green */
     border: none;
     border-radius: 8px;
     font-size: 1.1rem;
@@ -253,11 +267,11 @@
     margin-top: 30px;
     cursor: pointer;
     transition: background 0.3s, transform 0.1s;
-    box-shadow: 0 4px 15px rgba(0, 230, 118, 0.4);
+    box-shadow: 0 4px 15px var(--color-neon-glow);
 }
 
 .sign-in-btn:hover {
-    background: #00b359;
+    background: var(--color-neon-accent-hover);
     transform: translateY(-1px);
 }
 
@@ -268,26 +282,18 @@
     color: var(--color-text-secondary);
 }
 
-.admin-contact a,
-.terms-policy a {
+.admin-contact a {
     color: var(--color-neon-accent);
     text-decoration: none;
     font-weight: 500;
     transition: color 0.2s;
 }
 
-.admin-contact a:hover,
-.terms-policy a:hover {
-    color: #00b359;
+.admin-contact a:hover {
+    color: var(--color-neon-accent-hover);
 }
 
-.terms-policy {
-    text-align: center;
-    font-size: 0.8rem;
-    color: var(--color-text-secondary);
-    margin-top: 30px;
-}
-
+/* --- Modals --- */
 .modal-backdrop {
     position: fixed;
     top: 0;
@@ -310,7 +316,7 @@
 }
 
 .modal-content {
-    background: #1e1e24;
+    background: var(--color-surface);
     padding: 30px;
     border-radius: 12px;
     width: 450px;
@@ -319,7 +325,7 @@
     position: relative;
     transform: scale(0.9);
     transition: transform 0.3s ease-out;
-    border: 1px solid var(--coloe-border);
+    border: 1px solid var(--color-border);
 }
 
 .modal-backdrop.is-open .modal-content {
@@ -385,13 +391,14 @@
 .modal-btn.submit-btn {
     background: var(--color-neon-accent);
     color: #1e1e24;
-    box-shadow: 0 2px 8px rgba(0, 230, 118, 0.4);
+    box-shadow: 0 2px 8px var(--color-neon-glow);
 }
 
 .modal-btn.submit-btn:hover {
-    background: #00b359;
+    background: var(--color-neon-accent-hover);
 }
 
+/* Specific Modal Styles */
 .small-modal {
     width: 350px;
     text-align: center;
@@ -406,10 +413,6 @@
 
 .success-icon i {
     animation: bounceIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.small-modal p {
-    margin-bottom: 15px;
 }
 
 .try-different-email {
@@ -431,6 +434,7 @@
     margin-bottom: 0 !important;
 }
 
+/* Contact Form */
 .contact-form label {
     margin-top: 15px;
     margin-bottom: 5px;
@@ -461,6 +465,11 @@
     font-size: 1rem;
     padding: 0;
     cursor: pointer;
+}
+
+.select-group select option {
+    background-color: var(--color-surface);
+    color: var(--color-text-primary);
 }
 
 .select-group .select-icon {
@@ -515,11 +524,12 @@
     padding: 10px 20px;
 }
 
+/* Toast */
 .toast-notification {
     position: fixed;
     bottom: 30px;
     right: 30px;
-    background: #1e1e24;
+    background: var(--color-surface);
     padding: 15px 20px;
     border-radius: 8px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.7);
@@ -546,59 +556,146 @@
     font-size: 1.2rem;
 }
 
+/* Mobile Responsiveness */
 @media (max-width: 1024px) {
     .login-container {
         flex-direction: column;
+        background: var(--color-background);
+        /* Apply the dot pattern to the whole container on mobile for continuity */
+        background-image: radial-gradient(circle at 1px 1px, rgba(0, 230, 118, 0.05) 1px, transparent 0);
+        background-size: 40px 40px;
+        justify-content: center;
+        /* Center content vertically */
+        min-height: 100vh;
     }
+
     .promo-section {
-        padding: 60px 50px;
+        padding: 20px 20px 10px 20px;
+        /* Minimal padding */
         text-align: center;
         border-right: none;
-        border-bottom: 1px solid var(--color-border);
+        border-bottom: none;
+        min-height: auto;
+        background: transparent;
+        flex: 0;
     }
+
     .logo-area {
         justify-content: center;
+        margin-bottom: 0;
     }
-    .promo-section h2 {
-        font-size: 2.5rem;
+
+    .logo-icon {
+        font-size: 3.5rem;
+        /* Larger logo for mobile */
     }
-    .description {
-        max-width: 100%;
+
+    .logo-img {
+        height: 65px;
+        width: auto;
+        margin-right: 15px;
+        margin-bottom: 0;
+    }
+
+    .login-form-section .welcome-text {
         text-align: center;
-        margin: 0 auto 30px auto;
+        font-size: 1.5rem;
+        /* Further reduced title size */
     }
+
+    .login-form-section .subtitle {
+        text-align: center;
+        font-size: 0.85rem;
+        /* Further reduced subtitle size */
+        display: block;
+    }
+
+    /* Hide promo content on mobile */
+    .promo-section h2,
+    .description,
     .stats-grid {
-        max-width: 100%;
-        justify-content: center;
-        margin: 0 auto;
+        display: none;
     }
+
+    /* Card Style for Mobile Login Form */
     .login-form-section {
         width: 100%;
-        padding: 50px 50px;
+        max-width: 500px;
+        margin: 10px auto;
+        /* Close gap between logo and form */
+        padding: 30px;
+        border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        border: 1px solid var(--color-border);
+        background: var(--color-surface);
+        position: relative;
+        z-index: 2;
     }
 }
 
 @media (max-width: 768px) {
-    .promo-section,
-    .login-form-section {
-        padding: 40px 20px;
-    }
+
+    /* Removed conflicting promo-section padding to fix gap inconsistency */
+
     .promo-section h2 {
         font-size: 2rem;
     }
+
+    .stats-grid {
+        gap: 15px;
+    }
+
+    .stat-item {
+        padding: 15px;
+    }
+
+    .stat-value {
+        font-size: 1.5rem;
+    }
+
+    .login-form-section {
+        width: 90%;
+        /* Leave some side gaps */
+        padding: 30px 20px;
+    }
+
     .form-row {
         flex-direction: column;
         gap: 0;
     }
+
     .modal-content {
         width: 95%;
         padding: 20px;
     }
+
     .modal-btn {
         padding: 12px 15px;
         font-size: 0.9rem;
     }
-    .small-modal {
-        width: 90%;
+}
+
+@media (max-width: 480px) {
+
+    /* Keep stats grid 2 columns! Do NOT reset to 1fr here */
+    .stats-grid {
+        gap: 10px;
+    }
+
+    /* Adjust text size for very small screens */
+    .stat-value {
+        font-size: 1.3rem;
+    }
+
+    .stat-label {
+        font-size: 0.8rem;
+    }
+
+    .promo-section h2 {
+        font-size: 1.8rem;
+    }
+
+    .logo-area h1 {
+        font-size: 1.5rem;
     }
 }

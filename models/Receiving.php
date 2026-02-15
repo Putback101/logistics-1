@@ -36,13 +36,15 @@ class Receiving {
   public function getAll(): array {
     $stmt = $this->pdo->query("
       SELECT
-        po_id,
+        r.po_id,
+        po.po_number,
         item_name,
         quantity_received,
         qc_status,
         qc_notes,
         received_at
-      FROM receiving
+      FROM receiving r
+      LEFT JOIN purchase_orders po ON po.id = r.po_id
       ORDER BY received_at DESC
     ");
 

@@ -3,14 +3,20 @@
 
 function wf_po_can_transition(string $from, string $to): bool {
   $map = [
-    'Draft' => ['Pending Approval'],
+    // Drafting / approval loop
+    'Draft' => ['Pending Approval', 'Sent'],
     'Pending Approval' => ['Approved', 'Rejected'],
-    'Rejected' => ['Draft'],
+    'Rejected' => ['Draft', 'Pending Approval'],
+
+    // Fulfillment loop
     'Approved' => ['Sent'],
-    'Sent' => ['Received','Returned'],   // NEW: QC can fail after Sent
-    'Returned' => ['Sent'],              // NEW: after return, you may re-send
+    'Sent' => ['Received','Returned'],
+    'Returned' => ['Sent'],
+
+    // Terminal
     'Received' => [],
   ];
+
   return in_array($to, $map[$from] ?? [], true);
 }
 
@@ -21,7 +27,7 @@ function wf_po_next(string $action): ?string {
     'reject' => 'Rejected',
     'send_to_supplier' => 'Sent',
     'receive_goods' => 'Received',
-    'return_to_supplier' => 'Returned', // NEW
+    'return_to_supplier' => 'Returned',
     default => null
   };
 }

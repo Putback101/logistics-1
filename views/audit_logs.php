@@ -19,8 +19,12 @@ $logs = $audit->getAll();
 <main class="main-content">
   <div class="content-area">
 
-    <h2 class="mb-3">Audit Trail</h2>
-      <p class="text-muted mb-4">System activity logs (read-only).</p>
+    <div class="module-header mb-3">
+      <div>
+        <h2 class="mb-1">Audit Trail</h2>
+        <p class="text-muted mb-0">System activity logs (read-only).</p>
+      </div>
+    </div>
 
       <div class="table-card">
         <div class="table-responsive">
@@ -36,10 +40,10 @@ $logs = $audit->getAll();
             <tbody>
               <?php foreach ($logs as $l): ?>
               <tr>
-                <td><?= htmlspecialchars($l['fullname']) ?></td>
-                <td><?= ucfirst($l['role']) ?></td>
+                <td><?= htmlspecialchars($l['fullname'] ?? 'System') ?></td>
+                <td><?= ucfirst((string)($l['role'] ?? 'n/a')) ?></td>
                 <td><?= htmlspecialchars($l['action']) ?></td>
-                <td><?= $l['log_time'] ?></td>
+                <td><?= htmlspecialchars((string)($l['log_time'] ?? '')) ?></td>
               </tr>
               <?php endforeach; ?>
             </tbody>
@@ -49,7 +53,6 @@ $logs = $audit->getAll();
 
     </div>
   </main>
-</div>
 
 <?php include "layout/footer.php"; ?>
 

@@ -2,19 +2,24 @@
 require_once __DIR__ . "/../config/auth.php";
 require_once __DIR__ . "/../config/database.php";
 require_once __DIR__ . "/../config/flash.php";
+require_once __DIR__ . "/../config/permissions.php";
 require_once __DIR__ . "/../models/Supplier.php";
 
 requireLogin();
+requireRole(['admin','manager','procurement_staff']);
 
 $role = $_SESSION['user']['role'] ?? 'guest';
-$isAdmin = ($role === 'admin');
-$canAdd = in_array($role, ['admin','manager'], true);
+$canEdit = hasPermission($role, 'procurement', 'edit');
+$canDelete = hasPermission($role, 'procurement', 'delete');
 
 $s = new Supplier($pdo);
 
-// ADD (admin/manager)
 if (isset($_POST['add_supplier']) || isset($_POST['add'])) {
-  if (!$canAdd) { http_response_code(403); exit; }
+  if (!$canEdit) {
+    http_response_code(403);
+    set_flash('error', 'You are not allowed to add suppliers.');
+    header("Location: ../views/procurement/procurement.php?tab=suppliers"); exit;
+  }
 
   $name = trim($_POST['name'] ?? '');
   $contact = trim($_POST['contact_person'] ?? '');
@@ -23,17 +28,20 @@ if (isset($_POST['add_supplier']) || isset($_POST['add'])) {
 
   if ($name === '') {
     set_flash('error', 'Supplier name is required.');
-    header("Location: ../views/suppliers.php"); exit;
+    header("Location: ../views/procurement/procurement.php?tab=suppliers"); exit;
   }
 
   $s->create($name, $contact, $email, $phone);
   set_flash('success', 'Supplier added.');
-  header("Location: ../views/suppliers.php"); exit;
+  header("Location: ../views/procurement/procurement.php?tab=suppliers"); exit;
 }
 
-// UPDATE (admin only)
 if (isset($_POST['update_supplier'])) {
-  if (!$isAdmin) { http_response_code(403); exit; }
+  if (!$canEdit) {
+    http_response_code(403);
+    set_flash('error', 'You are not allowed to update suppliers.');
+    header("Location: ../views/procurement/procurement.php?tab=suppliers"); exit;
+  }
 
   $id = $_POST['id'] ?? '';
   $name = trim($_POST['name'] ?? '');
@@ -43,34 +51,38 @@ if (isset($_POST['update_supplier'])) {
 
   if (!ctype_digit((string)$id) || $name === '') {
     set_flash('error', 'Invalid supplier data.');
-    header("Location: ../views/suppliers.php"); exit;
+    header("Location: ../views/procurement/procurement.php?tab=suppliers"); exit;
   }
 
   $s->update((int)$id, $name, $contact, $email, $phone);
   set_flash('success', 'Supplier updated.');
-  header("Location: ../views/suppliers.php"); exit;
+  header("Location: ../views/procurement/procurement.php?tab=suppliers"); exit;
 }
 
-// DELETE (admin only)
 if (isset($_POST['delete_supplier'])) {
-  if (!$isAdmin) { http_response_code(403); exit; }
+  if (!$canDelete) {
+    http_response_code(403);
+    set_flash('error', 'You are not allowed to delete suppliers.');
+    header("Location: ../views/procurement/procurement.php?tab=suppliers"); exit;
+  }
 
   $id = $_POST['id'] ?? '';
   if (!ctype_digit((string)$id)) {
     set_flash('error', 'Invalid supplier.');
-    header("Location: ../views/suppliers.php"); exit;
+    header("Location: ../views/procurement/procurement.php?tab=suppliers"); exit;
   }
 
-  // Optional safety: prevent delete if used in purchase_orders
   if ($s->isUsedInPurchaseOrders((int)$id)) {
     set_flash('error', 'Cannot delete supplier: it is used in purchase orders.');
-    header("Location: ../views/suppliers.php"); exit;
+    header("Location: ../views/procurement/procurement.php?tab=suppliers"); exit;
   }
 
   $s->delete((int)$id);
   set_flash('success', 'Supplier deleted.');
-  header("Location: ../views/suppliers.php"); exit;
+  header("Location: ../views/procurement/procurement.php?tab=suppliers"); exit;
 }
 
-header("Location: ../views/suppliers.php");
+header("Location: ../views/procurement/procurement.php?tab=suppliers");
 exit;
+
+

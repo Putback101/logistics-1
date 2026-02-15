@@ -10,6 +10,10 @@ class Dashboard {
         return $this->pdo->query("SELECT COUNT(*) FROM fleet")->fetchColumn();
     }
 
+    public function countAssets() {
+        return $this->pdo->query("SELECT COUNT(*) FROM assets")->fetchColumn();
+    }
+
     public function countProcurement() {
         return $this->pdo->query("SELECT COUNT(*) FROM procurement")->fetchColumn();
     }
@@ -26,7 +30,6 @@ class Dashboard {
         return (int)$this->pdo->query("SELECT COUNT(*) FROM projects")->fetchColumn();
     }
 
-    // Role-based dashboard stats
     public function getFleetStats() {
         $stmt = $this->pdo->query("SELECT status, COUNT(*) as count FROM fleet GROUP BY status");
         return $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -58,33 +61,34 @@ class Dashboard {
     }
 
     public function getRecentActivities($limit = 5, $userRole = null) {
-        // Try to fetch from audit_logs first, fall back to union if it doesn't have required columns
         try {
             $query = "
-                SELECT 
-                    CONCAT(a.action, ' - ', a.entity_type, ' #', a.entity_id) as description,
-                    COALESCE(a.created_at, a.timestamp, NOW()) as created_at,
+                SELECT
+                    CONCAT(
+                        a.action,
+                        COALESCE(CONCAT(' - ', a.entity_type), ''),
+                        COALESCE(CONCAT(' #', a.entity_id), '')
+                    ) AS description,
+                    a.log_time AS created_at,
                     a.action,
                     a.entity_type
                 FROM audit_logs a
-                ORDER BY COALESCE(a.created_at, a.timestamp, NOW()) DESC
+                ORDER BY a.log_time DESC
                 LIMIT ?
             ";
-            
+
             $stmt = $this->pdo->prepare($query);
             $stmt->bindValue(1, $limit, PDO::PARAM_INT);
             $stmt->execute();
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            
-            // If we got results, return them
+
             if (!empty($results)) {
                 return $results;
             }
         } catch (Exception $e) {
-            // Fall through to backup query
+            // Fallback below
         }
-        
-        // Fallback: fetch from individual tables
+
         $stmt = $this->pdo->prepare("
             SELECT 'Fleet' as type, vehicle_name as description, created_at FROM fleet
             UNION ALL
@@ -100,17 +104,21 @@ class Dashboard {
     }
 
     public function getPendingTasks($role = null) {
-        $query = "SELECT 'Approve PO' as task, po_number as reference, created_at as due_date FROM purchase_orders WHERE status='Approved'";
-        
-        if ($role === 'procurement') {
-            $query = "SELECT 'Review Procurement' as task, item_name, created_at FROM procurement WHERE status='Pending'";
-        } elseif ($role === 'warehouse') {
-            $query = "SELECT 'Receive Stock' as task, item_name, created_at FROM purchase_orders WHERE status='Sent'";
-        } elseif ($role === 'project') {
-            $query = "SELECT 'Start Task' as task, title, start_date FROM project_tasks WHERE status='Pending'";
+        $query = "SELECT 'Approve Request' as task, CONCAT(item_name, ' (', quantity, ')') as reference, created_at as due_date, id as ref_id, 'procurement' as ref_type FROM procurement WHERE status='Pending'";
+
+        if (in_array($role, ['procurement_staff'], true)) {
+            $query = "SELECT 'Review Procurement' as task, item_name AS reference, created_at as due_date, id as ref_id, 'procurement' as ref_type FROM procurement WHERE status='Pending'";
+        } elseif (in_array($role, ['warehouse_staff'], true)) {
+            $query = "SELECT 'Receive Stock' as task, po_number AS reference, created_at as due_date, id as ref_id, 'purchase_order' as ref_type FROM purchase_orders WHERE status='Sent'";
+        } elseif (in_array($role, ['project_staff'], true)) {
+            $query = "SELECT 'Start Task' as task, title AS reference, COALESCE(due_date, start_date, DATE(created_at)) AS due_date, id as ref_id, 'project_task' as ref_type FROM project_tasks WHERE status='Todo'";
+        } elseif (in_array($role, ['mro_staff'], true)) {
+            $query = "SELECT 'Perform Maintenance' as task, type AS reference, COALESCE(performed_at, DATE(created_at)) AS due_date, id as ref_id, 'maintenance' as ref_type FROM maintenance_logs ORDER BY created_at DESC";
         }
 
         $stmt = $this->pdo->query($query . " LIMIT 5");
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
+
+

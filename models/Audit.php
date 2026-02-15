@@ -10,7 +10,7 @@ class Audit {
         $sql = "
             SELECT audit_logs.*, users.fullname, users.role
             FROM audit_logs
-            JOIN users ON audit_logs.user_id = users.id
+            LEFT JOIN users ON audit_logs.user_id = users.id
             ORDER BY audit_logs.log_time DESC
         ";
         return $this->pdo->query($sql)->fetchAll();
