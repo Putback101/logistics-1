@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 class Procurement {
     private PDO $pdo;
     private array $columnCache = [];
@@ -33,11 +33,19 @@ class Procurement {
         return $this->hasColumn('po_number');
     }
 
+    private function supportsExternalSource(): bool {
+        return $this->hasColumn('source_module')
+            && $this->hasColumn('source_system')
+            && $this->hasColumn('source_reference')
+            && $this->hasColumn('source_payload');
+    }
+
     public function getAll(): array {
         if ($this->supportsPoNumber()) {
             $sql = "
                 SELECT p.*,
                        po.id AS linked_po_id,
+                       po.total_amount AS linked_po_total,
                        i.item_name AS master_item_name,
                        i.category AS item_category,
                        i.unit AS item_unit
@@ -50,7 +58,7 @@ class Procurement {
         }
 
         return $this->pdo->query("
-            SELECT p.*, NULL AS po_number, NULL AS linked_po_id,
+            SELECT p.*, NULL AS po_number, NULL AS linked_po_id, NULL AS linked_po_total,
                    i.item_name AS master_item_name,
                    i.category AS item_category,
                    i.unit AS item_unit
@@ -68,7 +76,12 @@ class Procurement {
         ?int $budgetYear = null,
         float $estimatedAmount = 0,
         ?string $requestRef = null,
-        ?int $itemId = null
+        ?int $itemId = null,
+        ?int $requestedBy = null,
+        ?string $sourceModule = null,
+        ?string $sourceSystem = null,
+        ?string $sourceReference = null,
+        ?string $sourcePayload = null
     ): bool {
         $columns = ['item_name', 'quantity', 'supplier', 'status'];
         $values = [$item, $qty, $supplier, 'Pending'];
@@ -88,6 +101,20 @@ class Procurement {
         if ($this->hasColumn('request_ref')) {
             $columns[] = 'request_ref';
             $values[] = $requestRef;
+        }
+        if ($this->hasColumn('requested_by')) {
+            $columns[] = 'requested_by';
+            $values[] = $requestedBy;
+        }
+        if ($this->supportsExternalSource()) {
+            $columns[] = 'source_module';
+            $values[] = $sourceModule;
+            $columns[] = 'source_system';
+            $values[] = $sourceSystem;
+            $columns[] = 'source_reference';
+            $values[] = $sourceReference;
+            $columns[] = 'source_payload';
+            $values[] = $sourcePayload;
         }
 
         $placeholders = implode(',', array_fill(0, count($columns), '?'));
@@ -166,6 +193,60 @@ class Procurement {
             return [];
         }
 
+        // Use linked PO totals for approved requests whenever a PO exists.
+        // Pending requests remain estimate-based.
+        if ($this->supportsPoNumber()) {
+            $stmt = $this->pdo->query("
+                SELECT
+                  y.year,
+                  COALESCE(p.pending_amount, 0) AS pending_amount,
+                  COALESCE(a.approved_amount, 0) AS approved_amount,
+                  COALESCE(p.pending_amount, 0) + COALESCE(a.approved_amount, 0) AS total_requested
+                FROM (
+                  SELECT DISTINCT budget_year AS year
+                  FROM procurement
+                  WHERE budget_year IS NOT NULL
+                ) y
+                LEFT JOIN (
+                  SELECT budget_year AS year, SUM(estimated_amount) AS pending_amount
+                  FROM procurement
+                  WHERE budget_year IS NOT NULL
+                    AND status = 'Pending'
+                  GROUP BY budget_year
+                ) p ON p.year = y.year
+                LEFT JOIN (
+                  SELECT t.year, SUM(t.amount) AS approved_amount
+                  FROM (
+                    SELECT
+                      p.budget_year AS year,
+                      p.id AS uniq_key,
+                      p.estimated_amount AS amount
+                    FROM procurement p
+                    WHERE p.budget_year IS NOT NULL
+                      AND p.status = 'Approved'
+                      AND (p.po_number IS NULL OR p.po_number = '')
+
+                    UNION ALL
+
+                    SELECT
+                      p.budget_year AS year,
+                      po.id AS uniq_key,
+                      po.total_amount AS amount
+                    FROM procurement p
+                    INNER JOIN purchase_orders po ON po.po_number = p.po_number
+                    WHERE p.budget_year IS NOT NULL
+                      AND p.status = 'Approved'
+                      AND p.po_number IS NOT NULL
+                      AND p.po_number <> ''
+                    GROUP BY p.budget_year, po.id, po.total_amount
+                  ) t
+                  GROUP BY t.year
+                ) a ON a.year = y.year
+                ORDER BY y.year DESC
+            ");
+            return $stmt->fetchAll();
+        }
+
         $stmt = $this->pdo->query("
             SELECT
               budget_year AS year,
@@ -201,4 +282,20 @@ class Procurement {
         $stmt->execute($params);
         return (float)($stmt->fetch()['total'] ?? 0);
     }
+
+    public function findBySource(string $sourceModule, string $sourceReference): array {
+        if (!$this->supportsExternalSource()) {
+            return [];
+        }
+        $stmt = $this->pdo->prepare("
+            SELECT *
+            FROM procurement
+            WHERE source_module = ?
+              AND source_reference = ?
+            ORDER BY id ASC
+        ");
+        $stmt->execute([$sourceModule, $sourceReference]);
+        return $stmt->fetchAll();
+    }
 }
+

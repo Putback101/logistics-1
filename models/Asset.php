@@ -1,32 +1,48 @@
-<?php
+﻿<?php
 class Asset {
   private $pdo;
-  public function __construct($pdo){ $this->pdo = $pdo; }
+  public function __construct($pdo){
+    $this->pdo = $pdo;
+    $this->ensureWarehouseSourceColumn();
+  }
+
+  private function ensureWarehouseSourceColumn(): void {
+    $stmt = $this->pdo->query("SHOW COLUMNS FROM assets LIKE 'source_inventory_id'");
+    $exists = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
+    if (!$exists) {
+      $this->pdo->exec("ALTER TABLE assets ADD COLUMN source_inventory_id INT NULL AFTER notes");
+      $this->pdo->exec("ALTER TABLE assets ADD INDEX idx_assets_source_inventory_id (source_inventory_id)");
+    }
+  }
 
   // -----------------------------
   // REGISTRY
   // -----------------------------
   public function getAll(): array {
     $sql = "SELECT a.*,
-              u.fullname AS assigned_name
+              u.fullname AS assigned_name,
+              inv.item_name AS source_inventory_name,
+              inv.location AS source_inventory_location,
+              inv.stock AS source_inventory_stock
             FROM assets a
             LEFT JOIN users u ON u.id = a.assigned_to
+            LEFT JOIN inventory inv ON inv.id = a.source_inventory_id
             ORDER BY a.id DESC";
     return $this->pdo->query($sql)->fetchAll();
   }
 
   public function getById(int $id) {
-    $stmt = $this->pdo->prepare("SELECT * FROM assets WHERE id=?");
+    $stmt = $this->pdo->prepare("SELECT a.*, inv.item_name AS source_inventory_name, inv.location AS source_inventory_location, inv.stock AS source_inventory_stock FROM assets a LEFT JOIN inventory inv ON inv.id = a.source_inventory_id WHERE a.id=?");
     $stmt->execute([$id]);
     return $stmt->fetch();
   }
 
-  public function create(array $d): void {
+  public function create(array $d): int {
     $stmt = $this->pdo->prepare("
       INSERT INTO assets
         (asset_tag, asset_name, asset_category, brand, model, serial_no,
-         acquisition_date, purchase_cost, status, location, assigned_to, notes)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+         acquisition_date, purchase_cost, status, location, assigned_to, notes, source_inventory_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
     ");
     $stmt->execute([
       trim($d['asset_tag'] ?? ''),
@@ -40,8 +56,11 @@ class Asset {
       $d['status'] ?? 'Active',
       trim($d['location'] ?? ''),
       $d['assigned_to'] !== '' ? (int)$d['assigned_to'] : null,
-      trim($d['notes'] ?? '')
+      trim($d['notes'] ?? ''),
+      isset($d['source_inventory_id']) && ctype_digit((string)$d['source_inventory_id']) ? (int)$d['source_inventory_id'] : null,
     ]);
+
+    return (int)$this->pdo->lastInsertId();
   }
 
   public function update(int $id, array $d): void {
@@ -58,7 +77,8 @@ class Asset {
         status=?,
         location=?,
         assigned_to=?,
-        notes=?
+        notes=?,
+        source_inventory_id=?
       WHERE id=?
     ");
     $stmt->execute([
@@ -74,6 +94,7 @@ class Asset {
       trim($d['location'] ?? ''),
       $d['assigned_to'] !== '' ? (int)$d['assigned_to'] : null,
       trim($d['notes'] ?? ''),
+      isset($d['source_inventory_id']) && ctype_digit((string)$d['source_inventory_id']) ? (int)$d['source_inventory_id'] : null,
       $id
     ]);
   }
@@ -120,7 +141,6 @@ class Asset {
       trim($d['remarks'] ?? '')
     ]);
 
-    // Update asset current location/assignee (so tracking stays current)
     $assetId = (int)$d['asset_id'];
     $toLoc = trim($d['to_location'] ?? '');
     $toUser = $d['to_user'] !== '' ? (int)$d['to_user'] : null;
@@ -160,7 +180,6 @@ class Asset {
       trim($d['remarks'] ?? '')
     ]);
 
-    // Optional: auto-set status to Under Maintenance if needed
     if (($d['condition_status'] ?? '') === 'Needs Maintenance') {
       $u = $this->pdo->prepare("UPDATE assets SET status='Under Maintenance' WHERE id=?");
       $u->execute([(int)$d['asset_id']]);

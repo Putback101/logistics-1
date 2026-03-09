@@ -73,22 +73,22 @@ if (!function_exists('any_active')) {
       </a>
     </li>
 
-    <?php if (can($role, ['manager', 'procurement_staff'])): ?>
-      <li class="nav-item">
-        <a class="nav-link" data-tooltip="Procurement"
-           href="<?= $base ?>/views/procurement/procurement.php">
-          <i class="fas fa-dolly-flatbed"></i>
-          <span class="nav-label">Procurement</span>
-        </a>
-      </li>
-    <?php endif; ?>
-
     <?php if (can($role, ['manager', 'project_staff'])): ?>
       <li class="nav-item">
         <a class="nav-link" data-tooltip="Project Management"
            href="<?= $base ?>/views/project/projects.php">
           <i class="fas fa-project-diagram"></i>
           <span class="nav-label">Project Management</span>
+        </a>
+      </li>
+    <?php endif; ?>
+
+    <?php if (can($role, ['manager', 'procurement_staff'])): ?>
+      <li class="nav-item">
+        <a class="nav-link" data-tooltip="Procurement"
+           href="<?= $base ?>/views/procurement/procurement.php">
+          <i class="fas fa-dolly-flatbed"></i>
+          <span class="nav-label">Procurement</span>
         </a>
       </li>
     <?php endif; ?>

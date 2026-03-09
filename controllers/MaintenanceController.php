@@ -36,12 +36,14 @@ if (isset($_POST['add'])) {
   }
 
   if ($hasFleet) {
-    $m->createFleet((int)$fleetId, $type, $desc, $cost, $date, $_SESSION['user']['id']);
+    $requestRef = 'MRO-' . date('Ymd-His') . '-' . random_int(100, 999);
+    $m->createFleet((int)$fleetId, $type, $desc, $cost, $date, $_SESSION['user']['id'], $requestRef, 'Normal', 'mro', 'logistics-1', $requestRef, null);
     $pdo->prepare("UPDATE fleet SET status='Maintenance' WHERE id=?")->execute([(int)$fleetId]);
     $pdo->prepare("INSERT INTO audit_logs (user_id, action) VALUES (?,?)")
         ->execute([$_SESSION['user']['id'], "Logged $type for fleet ID $fleetId"]);
   } else {
-    $m->createAsset((int)$assetId, $type, $desc, $cost, $date, $_SESSION['user']['id']);
+    $requestRef = 'MRO-' . date('Ymd-His') . '-' . random_int(100, 999);
+    $m->createAsset((int)$assetId, $type, $desc, $cost, $date, $_SESSION['user']['id'], $requestRef, 'Normal', 'mro', 'logistics-1', $requestRef, null);
     $pdo->prepare("UPDATE assets SET status='Under Maintenance' WHERE id=?")->execute([(int)$assetId]);
     $pdo->prepare("INSERT INTO audit_logs (user_id, action) VALUES (?,?)")
         ->execute([$_SESSION['user']['id'], "Logged $type for asset ID $assetId"]);

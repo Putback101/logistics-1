@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 require_once __DIR__ . "/../../config/auth.php";
 require_once __DIR__ . "/../../config/database.php";
 require_once __DIR__ . "/../../config/permissions.php";
@@ -432,12 +432,12 @@ if ($selectedProjectId > 0) {
             <button type="button" class="tab-btn planning-switch-btn" data-target="capacity-planning">Capacity Planning</button>
           </div></div>
           <div class="col-12">
-            <div class="form-card" style="padding:12px; min-height:220px;">
+            <div class="planning-preview-shell">
               <div id="planning_board_preview_content"></div>
             </div>
             <div id="planning_preview_work_breakdown_template" class="d-none">
-              <h6 class="mb-3">Work Breakdown and Milestones</h6>
-              <form method="POST" action="../../controllers/ProjectTaskController.php" class="row g-2 mb-3">
+              <h5 class="mb-3">Work Breakdown and Milestones</h5>
+              <form method="POST" action="../../controllers/ProjectTaskController.php" class="row g-3 mb-3 planning-work-form">
                 <input type="hidden" name="project_id" class="planning-project-id" value="">
                 <div class="col-md-6"><label class="form-label small">Title</label><input name="title" class="form-control" placeholder="Task title" required></div>
                 <div class="col-md-3"><label class="form-label small">Start</label><input type="date" name="start_date" class="form-control"></div>
@@ -447,13 +447,13 @@ if ($selectedProjectId > 0) {
                 <div class="col-md-3"><label class="form-label small">Assign User</label><select name="assigned_user_id" class="form-select"><option value="">None</option><?php foreach($users as $u): ?><option value="<?= (int)$u['id'] ?>"><?= htmlspecialchars($u['fullname']) ?></option><?php endforeach; ?></select></div>
                 <div class="col-md-3"><label class="form-label small">Assign Fleet</label><select name="assigned_fleet_id" class="form-select"><option value="">None</option><?php foreach($fleet as $f): ?><option value="<?= (int)$f['id'] ?>"><?= htmlspecialchars($f['vehicle_name'].' ('.$f['plate_number'].')') ?></option><?php endforeach; ?></select></div>
                 <div class="col-md-3"><label class="form-label small">Assign Asset</label><select name="assigned_asset_id" class="form-select"><option value="">None</option><?php foreach($assets as $a): ?><option value="<?= (int)$a['id'] ?>"><?= htmlspecialchars($a['asset_tag'].' - '.$a['asset_name']) ?></option><?php endforeach; ?></select></div>
-                <div class="col-12"><label class="form-label small">Description</label><textarea name="description" class="form-control" rows="2"></textarea></div>
+                <div class="col-12"><label class="form-label small">Description</label><textarea name="description" class="form-control" rows="5" placeholder="Enter milestone details and deliverables..."></textarea></div>
                 <div class="col-12"><button type="submit" class="btn btn-primary w-100" name="add_task"><i class="bi bi-plus-circle"></i> Add Task</button></div>
               </form>
-              <h6 class="mb-2">Milestone and Task Plan</h6>
+              <h5 class="mb-2">Milestone and Task Plan</h5>
               <div class="table-card p-0 mb-0" style="overflow:hidden;">
                 <div class="table-responsive">
-                  <table class="table table-striped table-hover align-middle mb-0">
+                  <table class="table table-striped table-hover align-middle mb-0 planning-resource-table planning-task-table">
                     <thead class="table-light"><tr><th>Task</th><th>Dates</th><th>Assigned</th><th>Status</th><th class="text-end">Action</th></tr></thead>
                     <tbody><tr><td colspan="5" class="text-muted text-center py-3">Save task to view project table.</td></tr></tbody>
                   </table>
@@ -461,8 +461,8 @@ if ($selectedProjectId > 0) {
               </div>
             </div>
             <div id="planning_preview_capacity_template" class="d-none">
-              <h6 class="mb-3">Capacity Planning</h6>
-              <form method="POST" action="../../controllers/ProjectResourceController.php" class="row g-2 mb-3 planning-capacity-form">
+              <h5 class="mb-3">Capacity Planning</h5>
+              <form method="POST" action="../../controllers/ProjectResourceController.php" class="row g-3 mb-3 planning-capacity-form">
                 <input type="hidden" name="project_id" class="planning-project-id" value="">
                 <div class="col-md-6"><label class="form-label small">Resource Type</label>
                   <select name="resource_type" class="form-select planning-resource-type">
@@ -481,13 +481,13 @@ if ($selectedProjectId > 0) {
                 <div class="col-md-6"><label class="form-label small">Role / Label</label><input name="role_label" class="form-control" placeholder="e.g. Driver, Coordinator"></div>
                 <div class="col-md-3"><label class="form-label small">From</label><input type="date" name="allocated_from" class="form-control"></div>
                 <div class="col-md-3"><label class="form-label small">To</label><input type="date" name="allocated_to" class="form-control"></div>
-                <div class="col-12"><label class="form-label small">Notes</label><textarea name="notes" class="form-control" rows="2"></textarea></div>
+                <div class="col-12"><label class="form-label small">Notes</label><textarea name="notes" class="form-control" rows="4" placeholder="Add constraints, assumptions, or notes..."></textarea></div>
                 <div class="col-12"><button type="submit" class="btn btn-primary w-100" name="add_resource"><i class="bi bi-person-plus"></i> Allocate</button></div>
               </form>
-              <h6 class="mb-2">Planned Resource Assignments</h6>
+              <h5 class="mb-2">Planned Resource Assignments</h5>
               <div class="table-card p-0 mb-0" style="overflow:hidden;">
                 <div class="table-responsive">
-                  <table class="table table-striped table-hover align-middle mb-0">
+                  <table class="table table-striped table-hover align-middle mb-0 planning-resource-table planning-task-table">
                     <thead class="table-light"><tr><th>Resource</th><th>Period</th><th class="text-end">Action</th></tr></thead>
                     <tbody><tr><td colspan="3" class="text-muted text-center py-3">Save allocation to view project table.</td></tr></tbody>
                   </table>
@@ -856,6 +856,7 @@ if ($selectedProjectId > 0) {
 <?php endif; ?>
 
 <?php require_once __DIR__ . "/../layout/footer.php"; ?>
+
 
 
 

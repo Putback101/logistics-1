@@ -60,8 +60,11 @@ class Dashboard {
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
-    public function getRecentActivities($limit = 5, $userRole = null) {
+    public function getRecentActivities($limit = 5, $userRole = null, $userId = null) {
         try {
+            $role = (string)($userRole ?? '');
+            $uid = (int)($userId ?? 0);
+
             $query = "
                 SELECT
                     CONCAT(
@@ -71,14 +74,84 @@ class Dashboard {
                     ) AS description,
                     a.log_time AS created_at,
                     a.action,
-                    a.entity_type
+                    a.entity_type,
+                    a.user_id
                 FROM audit_logs a
-                ORDER BY a.log_time DESC
-                LIMIT ?
             ";
 
+            $whereParts = [];
+            $params = [];
+
+            $roleFilters = [
+                'procurement_staff' => [
+                    'entity' => ['procurement', 'purchase_orders', 'purchase_order_items', 'suppliers', 'budgets', 'approvals'],
+                    'action_like' => ['procurement', 'purchase', 'supplier', 'budget', 'approval', 'po-'],
+                ],
+                'project_staff' => [
+                    'entity' => ['projects', 'project_tasks', 'project_resources', 'fleet'],
+                    'action_like' => ['project', 'task', 'resource', 'fleet expansion', 'timeline', 'schedule'],
+                ],
+                'asset' => [
+                    'entity' => ['assets', 'asset_monitor_logs', 'asset_movements'],
+                    'action_like' => ['asset', 'tracking', 'monitor', 'registry', 'tag'],
+                ],
+                'mro_staff' => [
+                    'entity' => ['maintenance_logs'],
+                    'action_like' => ['maintenance', 'repair', 'mro', 'service'],
+                ],
+                'warehouse_staff' => [
+                    'entity' => ['inventory', 'receiving', 'stock_reconciliation'],
+                    'action_like' => ['warehouse', 'inventory', 'receiv', 'stock', 'reconcil'],
+                ],
+            ];
+
+            // Admin and manager see all activity.
+            if (!in_array($role, ['admin', 'manager'], true) && isset($roleFilters[$role])) {
+                $cfg = $roleFilters[$role];
+                $moduleParts = [];
+
+                if (!empty($cfg['entity'])) {
+                    $entityPlaceholders = implode(',', array_fill(0, count($cfg['entity']), '?'));
+                    $moduleParts[] = "a.entity_type IN ($entityPlaceholders)";
+                    foreach ($cfg['entity'] as $entityType) {
+                        $params[] = $entityType;
+                    }
+                }
+
+                if (!empty($cfg['action_like'])) {
+                    foreach ($cfg['action_like'] as $needle) {
+                        $moduleParts[] = "LOWER(a.action) LIKE ?";
+                        $params[] = '%' . strtolower($needle) . '%';
+                    }
+                }
+
+                // Always include own actions to avoid empty feed when entity_type is missing.
+                if ($uid > 0) {
+                    $moduleParts[] = "a.user_id = ?";
+                    $params[] = $uid;
+                }
+
+                if (!empty($moduleParts)) {
+                    $whereParts[] = '(' . implode(' OR ', $moduleParts) . ')';
+                }
+            } elseif (!in_array($role, ['admin', 'manager'], true) && $uid > 0) {
+                // Unknown role: safest behavior is personal activity only.
+                $whereParts[] = 'a.user_id = ?';
+                $params[] = $uid;
+            }
+
+            if (!empty($whereParts)) {
+                $query .= ' WHERE ' . implode(' AND ', $whereParts);
+            }
+
+            $query .= ' ORDER BY a.log_time DESC LIMIT ?';
+
             $stmt = $this->pdo->prepare($query);
-            $stmt->bindValue(1, $limit, PDO::PARAM_INT);
+            $index = 1;
+            foreach ($params as $value) {
+                $stmt->bindValue($index++, $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
+            }
+            $stmt->bindValue($index, (int)$limit, PDO::PARAM_INT);
             $stmt->execute();
             $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -120,5 +193,3 @@ class Dashboard {
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
-
-

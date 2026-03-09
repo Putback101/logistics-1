@@ -107,7 +107,21 @@ if (isset($_POST['add'])) {
                 exit;
             }
 
-            $procurement->create($item, $qty, $supplier, 'Pending', $budgetYear, $estimated, $requestRef, $itemId);
+            $procurement->create(
+                $item,
+                $qty,
+                $supplier,
+                'Pending',
+                $budgetYear,
+                $estimated,
+                $requestRef,
+                $itemId,
+                (int)($_SESSION['user']['id'] ?? 0),
+                'procurement',
+                'logistics-1',
+                $requestRef,
+                null
+            );
             $reservedInRequest += $estimated;
             $created++;
         }
@@ -131,7 +145,21 @@ if (isset($_POST['add'])) {
                 exit;
             }
 
-            $procurement->create($item, $qty, $supplier, 'Pending', $budgetYear, $estimated, $requestRef, $itemId);
+            $procurement->create(
+                $item,
+                $qty,
+                $supplier,
+                'Pending',
+                $budgetYear,
+                $estimated,
+                $requestRef,
+                $itemId,
+                (int)($_SESSION['user']['id'] ?? 0),
+                'procurement',
+                'logistics-1',
+                $requestRef,
+                null
+            );
             $created = 1;
         }
     }

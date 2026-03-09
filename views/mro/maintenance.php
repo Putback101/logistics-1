@@ -22,11 +22,13 @@ $logTotal = count($logs);
 $maintenanceCount = 0;
 $repairCount = 0;
 $pendingWork = 0;
+$inboundRequests = 0;
 $totalCost = 0.0;
 foreach ($logs as $l) {
   $type = $l['type'] ?? 'Maintenance';
   if ($type === 'Repair') $repairCount++; else $maintenanceCount++;
   if (empty($l['performed_at'])) $pendingWork++;
+  if (!empty($l['source_module'])) $inboundRequests++;
   $totalCost += (float)($l['cost'] ?? 0);
 }
 
@@ -71,6 +73,7 @@ foreach ($logs as $row) {
       <div class="module-kpi-card"><div class="module-kpi-label">Maintenance</div><div class="module-kpi-value"><?= $maintenanceCount ?></div><div class="module-kpi-detail">Routine service tasks</div><div class="module-kpi-icon"><i class="fas fa-wrench"></i></div></div>
       <div class="module-kpi-card"><div class="module-kpi-label">Repairs</div><div class="module-kpi-value"><?= $repairCount ?></div><div class="module-kpi-detail">Break-fix incidents</div><div class="module-kpi-icon"><i class="fas fa-tools"></i></div></div>
       <div class="module-kpi-card"><div class="module-kpi-label">Pending Work</div><div class="module-kpi-value"><?= $pendingWork ?></div><div class="module-kpi-detail">No completion date yet</div><div class="module-kpi-icon"><i class="fas fa-hourglass-half"></i></div></div>
+      <div class="module-kpi-card"><div class="module-kpi-label">Inbound Requests</div><div class="module-kpi-value"><?= $inboundRequests ?></div><div class="module-kpi-detail">From external/internal modules</div><div class="module-kpi-icon"><i class="fas fa-inbox"></i></div></div>
     </div>
 
     <div class="tab-navigation mb-4">
@@ -84,8 +87,32 @@ foreach ($logs as $row) {
       <?php if ($canAdd): ?>
       <div id="addMaintenanceForm" style="display:none;">
         <form method="POST" action="../../controllers/MaintenanceController.php" class="row g-3" id="mroForm">
-          <div class="col-md-6"><label class="form-label">Fleet (optional)</label><select name="fleet_id" class="form-select" id="fleetSelect"><option value="">- Select Fleet -</option><?php foreach($fleet as $f): ?><option value="<?= (int)$f['id'] ?>"><?= htmlspecialchars($f['vehicle_name'].' ('.$f['plate_number'].')') ?></option><?php endforeach; ?></select></div>
-          <div class="col-md-6"><label class="form-label">Asset (optional)</label><select class="form-select" name="asset_id" id="assetSelect"><option value="">- Select Asset -</option><?php foreach ($assets as $a): ?><option value="<?= (int)$a['id'] ?>"><?= htmlspecialchars($a['asset_tag']) ?> - <?= htmlspecialchars($a['asset_name']) ?></option><?php endforeach; ?></select></div>
+          <div class="col-md-4">
+            <label class="form-label">Target Type *</label>
+            <select class="form-select" id="targetType" name="target_type" required>
+              <option value="fleet">Fleet Vehicle</option>
+              <option value="asset">Asset / Parts</option>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Fleet Vehicle</label>
+            <select name="fleet_id" class="form-select" id="fleetSelect">
+              <option value="">- Select Fleet -</option>
+              <?php foreach($fleet as $f): ?>
+                <option value="<?= (int)$f['id'] ?>"><?= htmlspecialchars($f['vehicle_name'].' ('.$f['plate_number'].')') ?></option>
+              <?php endforeach; ?>
+            </select>
+            <div class="form-text">No fleet yet? Add vehicles in <a href="../project/fleet.php?tab=vehicles">Fleet Module</a>.</div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Asset / Parts</label>
+            <select class="form-select" name="asset_id" id="assetSelect">
+              <option value="">- Select Asset -</option>
+              <?php foreach ($assets as $a): ?>
+                <option value="<?= (int)$a['id'] ?>"><?= htmlspecialchars($a['asset_tag']) ?> - <?= htmlspecialchars($a['asset_name']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
           <div class="col-md-3"><label class="form-label">Type</label><select name="type" class="form-select"><option value="Maintenance">Maintenance</option><option value="Repair">Repair</option></select></div>
           <div class="col-md-3"><label class="form-label">Cost</label><input type="number" step="0.01" name="cost" class="form-control" min="0" value="0"></div>
           <div class="col-md-3"><label class="form-label">Date Performed</label><input type="date" name="performed_at" class="form-control"><div class="form-text">Leave blank if this is pending.</div></div>
@@ -100,9 +127,9 @@ foreach ($logs as $row) {
         <h5 class="mb-3">Maintenance Logs</h5>
         <div class="table-responsive">
           <table class="table table-striped table-hover align-middle">
-            <thead class="table-light"><tr><th>Date</th><th>Target</th><th>Type</th><th>Cost</th><th>Description</th><th>Recorded By</th></tr></thead>
+            <thead class="table-light"><tr><th>Date</th><th>Source</th><th>Target</th><th>Type</th><th>Cost</th><th>Description</th><th>Recorded By</th></tr></thead>
             <tbody>
-              <?php if (count($logs) === 0): ?><tr><td colspan="6" class="text-muted text-center py-4">No logs yet.</td></tr><?php endif; ?>
+              <?php if (count($logs) === 0): ?><tr><td colspan="7" class="text-muted text-center py-4">No logs yet.</td></tr><?php endif; ?>
               <?php foreach($logs as $l): ?>
                 <?php
                   $target = '-';
@@ -110,9 +137,17 @@ foreach ($logs as $row) {
                   elseif (!empty($l['asset_tag'])) $target = $l['asset_tag'] . ' - ' . ($l['asset_name'] ?? '');
                   $dateText = $l['performed_at'] ?? $l['created_at'];
                   $isRequest = empty($l['performed_at']);
+                  $sourceLabel = trim((string)($l['source_module'] ?? ''));
+                  $sourceRef = trim((string)($l['source_reference'] ?? ''));
+                  if ($sourceLabel === '') {
+                    $sourceLabel = 'MANUAL';
+                  } else {
+                    $sourceLabel = strtoupper($sourceLabel);
+                  }
                 ?>
                 <tr>
                   <td class="text-muted small"><?= htmlspecialchars((string)$dateText) ?><?php if ($isRequest): ?><span class="badge bg-secondary ms-2">Request</span><?php endif; ?></td>
+                  <td><?= htmlspecialchars($sourceLabel) ?><?php if ($sourceRef !== ''): ?><div class="text-muted small"><?= htmlspecialchars($sourceRef) ?></div><?php endif; ?></td>
                   <td><?= htmlspecialchars((string)$target) ?></td>
                   <td><span class="badge <?= ($l['type'] ?? '') === 'Repair' ? 'bg-danger' : 'bg-warning text-dark' ?>"><?= htmlspecialchars((string)($l['type'] ?? 'Maintenance')) ?></span></td>
                   <td><?= number_format((float)($l['cost'] ?? 0), 2) ?></td>
@@ -206,19 +241,31 @@ foreach ($logs as $row) {
 
 <script>
 (function(){
+  const type = document.getElementById('targetType');
   const fleet = document.getElementById('fleetSelect');
   const asset = document.getElementById('assetSelect');
-  if (!fleet || !asset) return;
+  if (!type || !fleet || !asset) return;
+
   function sync() {
-    const hasFleet = fleet.value !== '';
-    const hasAsset = asset.value !== '';
-    asset.disabled = hasFleet;
-    fleet.disabled = hasAsset;
+    const mode = type.value;
+    const useFleet = mode === 'fleet';
+    const useAsset = mode === 'asset';
+
+    fleet.disabled = !useFleet;
+    asset.disabled = !useAsset;
+
+    fleet.required = useFleet;
+    asset.required = useAsset;
+
+    if (!useFleet) fleet.value = '';
+    if (!useAsset) asset.value = '';
   }
-  fleet.addEventListener('change', sync);
-  asset.addEventListener('change', sync);
+
+  type.addEventListener('change', sync);
   sync();
 })();
 </script>
 
 <?php require_once __DIR__ . "/../layout/footer.php"; ?>
+
+

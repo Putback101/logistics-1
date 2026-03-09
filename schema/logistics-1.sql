@@ -1,4 +1,4 @@
-SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+﻿SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
 SET time_zone = "+00:00";
 
@@ -21,6 +21,8 @@ DROP TABLE IF EXISTS `projects`;
 DROP TABLE IF EXISTS `purchase_order_items`;
 DROP TABLE IF EXISTS `receiving`;
 DROP TABLE IF EXISTS `supplier_returns`;
+DROP TABLE IF EXISTS `asset_requests`;
+DROP TABLE IF EXISTS `warehousing_requests`;
 DROP TABLE IF EXISTS `stock_reconciliation`;
 DROP TABLE IF EXISTS `purchase_orders`;
 DROP TABLE IF EXISTS `procurement`;
@@ -34,26 +36,25 @@ DROP TABLE IF EXISTS `users`;
 SET FOREIGN_KEY_CHECKS=1;
 
 CREATE TABLE `users` (
-
-
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `fullname` varchar(100) NOT NULL,
   `email` varchar(100) NOT NULL,
-  `password` varchar(255) NOT NULL,
+  `password` varchar(255) NOT NULL,  
   `role` enum('admin','manager','procurement_staff','project_staff','mro_staff','asset','warehouse_staff') NOT NULL DEFAULT 'project_staff',
+  `avatar_path` varchar(255) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`)
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT INTO `users` (`id`, `fullname`, `email`, `password`, `role`, `created_at`) VALUES
-(1, 'System Admin', 'admin@example.com', '$2y$10$/dpjGOoOOCL2B8pFcpkmkOra54SYgf1Z5B..9Sho2G2xGHvtHfCbG', 'admin', '2026-02-08 12:12:04'),
-(2, 'Operations Manager', 'manager@example.com', '$2y$10$/dpjGOoOOCL2B8pFcpkmkOra54SYgf1Z5B..9Sho2G2xGHvtHfCbG', 'manager', '2026-02-08 12:12:04'),
-(3, 'Procurement Staff', 'procurement.staff@example.com', '$2y$10$/dpjGOoOOCL2B8pFcpkmkOra54SYgf1Z5B..9Sho2G2xGHvtHfCbG', 'procurement_staff', '2026-02-08 12:12:04'),
-(4, 'Project Staff', 'project.staff@example.com', '$2y$10$/dpjGOoOOCL2B8pFcpkmkOra54SYgf1Z5B..9Sho2G2xGHvtHfCbG', 'project_staff', '2026-02-08 12:12:04'),
-(5, 'Assets Staff', 'assets.staff@example.com', '$2y$10$/dpjGOoOOCL2B8pFcpkmkOra54SYgf1Z5B..9Sho2G2xGHvtHfCbG', 'asset', '2026-02-08 12:12:04'),
-(6, 'MRO Staff', 'mro.staff@example.com', '$2y$10$/dpjGOoOOCL2B8pFcpkmkOra54SYgf1Z5B..9Sho2G2xGHvtHfCbG', 'mro_staff', '2026-02-08 12:12:04'),
-(7, 'Warehouse Staff', 'warehouse.staff@example.com', '$2y$10$/dpjGOoOOCL2B8pFcpkmkOra54SYgf1Z5B..9Sho2G2xGHvtHfCbG', 'warehouse_staff', '2026-02-08 12:12:04');
+INSERT INTO `users` (`id`, `fullname`, `email`, `password`, `role`, `avatar_path`, `created_at`) VALUES
+(1, 'System Admin', 'admin@example.com', '$2y$10$/dpjGOoOOCL2B8pFcpkmkOra54SYgf1Z5B..9Sho2G2xGHvtHfCbG', 'admin', NULL, '2026-02-08 12:12:04'),
+(2, 'Operations Manager', 'manager@example.com', '$2y$10$/dpjGOoOOCL2B8pFcpkmkOra54SYgf1Z5B..9Sho2G2xGHvtHfCbG', 'manager', NULL, '2026-02-08 12:12:04'),
+(3, 'Procurement Staff', 'procurement.staff@example.com', '$2y$10$/dpjGOoOOCL2B8pFcpkmkOra54SYgf1Z5B..9Sho2G2xGHvtHfCbG', 'procurement_staff', NULL, '2026-02-08 12:12:04'),
+(4, 'Project Staff', 'project.staff@example.com', '$2y$10$/dpjGOoOOCL2B8pFcpkmkOra54SYgf1Z5B..9Sho2G2xGHvtHfCbG', 'project_staff', NULL, '2026-02-08 12:12:04'),
+(5, 'Assets Staff', 'assets.staff@example.com', '$2y$10$/dpjGOoOOCL2B8pFcpkmkOra54SYgf1Z5B..9Sho2G2xGHvtHfCbG', 'asset', NULL, '2026-02-08 12:12:04'),
+(6, 'MRO Staff', 'mro.staff@example.com', '$2y$10$/dpjGOoOOCL2B8pFcpkmkOra54SYgf1Z5B..9Sho2G2xGHvtHfCbG', 'mro_staff', NULL, '2026-02-08 12:12:04'),
+(7, 'Warehouse Staff', 'warehouse.staff@example.com', '$2y$10$/dpjGOoOOCL2B8pFcpkmkOra54SYgf1Z5B..9Sho2G2xGHvtHfCbG', 'warehouse_staff', NULL, '2026-02-08 12:12:04');
 
 CREATE TABLE `budgets` (
 
@@ -119,10 +120,14 @@ CREATE TABLE `assets` (
   `location` varchar(120) DEFAULT NULL,
   `assigned_to` int(11) DEFAULT NULL,
   `notes` text DEFAULT NULL,
+  `source_inventory_id` int(11) DEFAULT NULL,
+
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   UNIQUE KEY `asset_tag` (`asset_tag`),
   KEY `fk_assets_assigned_to` (`assigned_to`),
+  KEY `idx_assets_source_inventory_id` (`source_inventory_id`),
+
   CONSTRAINT `fk_assets_assigned_to` FOREIGN KEY (`assigned_to`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -248,11 +253,19 @@ CREATE TABLE `maintenance_logs` (
   `cost` decimal(12,2) DEFAULT 0.00,
   `performed_at` date DEFAULT NULL,
   `recorded_by` int(11) DEFAULT NULL,
+  `request_ref` varchar(50) DEFAULT NULL,
+  `priority` enum('Low','Normal','High','Urgent') NOT NULL DEFAULT 'Normal',
+  `source_module` varchar(80) DEFAULT NULL,
+  `source_system` varchar(80) DEFAULT NULL,
+  `source_reference` varchar(120) DEFAULT NULL,
+  `source_payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`source_payload`)),
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   KEY `fk_maintenance_recorded_by` (`recorded_by`),
   KEY `fk_maintenance_fleet` (`fleet_id`),
   KEY `fk_maintenance_asset` (`asset_id`),
+  KEY `idx_maint_request_ref` (`request_ref`),
+  KEY `idx_maint_source` (`source_module`,`source_reference`),
   CONSTRAINT `fk_maintenance_asset` FOREIGN KEY (`asset_id`) REFERENCES `assets` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_maintenance_fleet` FOREIGN KEY (`fleet_id`) REFERENCES `fleet` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_maintenance_recorded_by` FOREIGN KEY (`recorded_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
@@ -272,11 +285,17 @@ CREATE TABLE `procurement` (
   `estimated_amount` decimal(12,2) NOT NULL DEFAULT 0.00,
   `po_number` varchar(50) DEFAULT NULL,
   `requested_by` int(11) DEFAULT NULL,
+  `source_module` varchar(80) DEFAULT NULL,
+  `source_system` varchar(80) DEFAULT NULL,
+  `source_reference` varchar(120) DEFAULT NULL,
+  `source_payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`source_payload`)),
   `supplier_id` int(11) DEFAULT NULL,
   `budget_id` int(11) DEFAULT NULL,
   `item_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `fk_proc_requested_by` (`requested_by`),
+  KEY `idx_proc_source_module` (`source_module`),
+  KEY `idx_proc_source_reference` (`source_reference`),
   KEY `fk_proc_supplier` (`supplier_id`),
   KEY `fk_proc_budget` (`budget_id`),
   KEY `fk_proc_item` (`item_id`),
@@ -362,6 +381,63 @@ CREATE TABLE `stock_reconciliation` (
   CONSTRAINT `fk_recon_user` FOREIGN KEY (`reconciled_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE `asset_requests` (
+
+
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `request_ref` varchar(50) NOT NULL,
+  `request_type` enum('registration','allocation','status_update') NOT NULL DEFAULT 'registration',
+  `asset_tag` varchar(60) DEFAULT NULL,
+  `asset_name` varchar(150) NOT NULL,
+  `asset_category` varchar(100) DEFAULT NULL,
+  `quantity` int(11) NOT NULL DEFAULT 1,
+  `status` enum('Pending','Processing','Fulfilled','Rejected') NOT NULL DEFAULT 'Pending',
+  `priority` enum('Low','Normal','High','Urgent') NOT NULL DEFAULT 'Normal',
+  `requested_by` int(11) DEFAULT NULL,
+  `source_module` varchar(80) NOT NULL,
+  `source_system` varchar(80) DEFAULT NULL,
+  `source_reference` varchar(120) NOT NULL,
+  `notes` varchar(255) DEFAULT NULL,
+  `source_payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`source_payload`)),
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_asset_req_ref` (`request_ref`),
+  KEY `idx_asset_req_type` (`request_type`),
+  KEY `idx_asset_req_status` (`status`),
+  KEY `idx_asset_req_source` (`source_module`,`source_reference`),
+  KEY `fk_asset_req_requested_by` (`requested_by`),
+  CONSTRAINT `fk_asset_req_requested_by` FOREIGN KEY (`requested_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `warehousing_requests` (
+
+
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `request_ref` varchar(50) NOT NULL,
+  `request_type` enum('replenishment','spare_parts','stock_transfer','issuance','asset_item') NOT NULL DEFAULT 'replenishment',
+  `item_id` int(11) DEFAULT NULL,
+  `item_name` varchar(150) NOT NULL,
+  `quantity` int(11) NOT NULL,
+  `status` enum('Pending','Processing','Fulfilled','Rejected') NOT NULL DEFAULT 'Pending',
+  `priority` enum('Low','Normal','High','Urgent') NOT NULL DEFAULT 'Normal',
+  `requested_by` int(11) DEFAULT NULL,
+  `source_module` varchar(80) NOT NULL,
+  `source_system` varchar(80) DEFAULT NULL,
+  `source_reference` varchar(120) NOT NULL,
+  `notes` varchar(255) DEFAULT NULL,
+  `source_payload` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`source_payload`)),
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_wh_req_ref` (`request_ref`),
+  KEY `idx_wh_req_type` (`request_type`),
+  KEY `idx_wh_req_status` (`status`),
+  KEY `idx_wh_req_source` (`source_module`,`source_reference`),
+  KEY `fk_wh_req_item` (`item_id`),
+  KEY `fk_wh_req_requested_by` (`requested_by`),
+  CONSTRAINT `fk_wh_req_item` FOREIGN KEY (`item_id`) REFERENCES `items` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_wh_req_requested_by` FOREIGN KEY (`requested_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `project_resources` (
 
 
@@ -373,6 +449,7 @@ CREATE TABLE `project_resources` (
   `allocated_from` date DEFAULT NULL,
   `allocated_to` date DEFAULT NULL,
   `notes` text DEFAULT NULL,
+  `source_inventory_id` int(11) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),
   KEY `fk_resources_project` (`project_id`),
@@ -428,8 +505,6 @@ COMMIT;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
-
-
 
 
 

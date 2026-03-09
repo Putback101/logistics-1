@@ -10,6 +10,14 @@ $name  = $_SESSION['user']['fullname'] ?? 'User';
 $email = $_SESSION['user']['email'] ?? '';
 $role  = $_SESSION['user']['role'] ?? 'guest';
 
+$avatarPath = trim((string)($_SESSION['user']['avatar_path'] ?? ''));
+$avatarSrc = $base . '/assets/img/profile.png';
+if ($avatarPath !== '') {
+    $avatarSrc = preg_match('/^https?:\/\//i', $avatarPath)
+      ? $avatarPath
+      : ($base . '/' . ltrim($avatarPath, '/'));
+}
+
 $success = get_flash('success');
 $error   = get_flash('error');
 ?>
@@ -47,7 +55,7 @@ $error   = get_flash('error');
     </a>
 
     <div class="profile-menu" id="profileMenu" role="button" tabindex="0" aria-label="Open profile menu">
-      <img src="<?= $base ?>/assets/img/profile.png" class="profile-img" alt="Profile picture">
+      <img src="<?= htmlspecialchars($avatarSrc) ?>" class="profile-img" alt="Profile picture">
 
       <div class="profile-dropdown">
         <h3><?= htmlspecialchars($name) ?></h3>
@@ -77,12 +85,9 @@ $error   = get_flash('error');
     <div class="app-modal-panel">
         <div class="app-modal-header">
             <h2 id="modalTitle">Add Item</h2>
-            <button class="app-modal-close" onclick="closeModal()">&times;</button>
         </div>
         <div class="app-modal-body" id="modalBody">
             <!-- Form will be injected here -->
         </div>
     </div>
 </div>
-
-

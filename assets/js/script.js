@@ -291,46 +291,37 @@ if (searchInput) {
 }
 
 // Modal functions
-function openModal(title, formHTML) {
+function getModalParts() {
     const modal = document.getElementById('addModal');
     const modalTitle = document.getElementById('modalTitle');
     const modalBody = document.getElementById('modalBody');
-    if (!modal || !modalTitle || !modalBody) return;
+    return { modal, modalTitle, modalBody };
+}
 
-    modalTitle.innerHTML = '<i class="bi bi-plus-circle-fill" style="color: var(--color-accent); margin-right: 8px;"></i>' + title;
-    modalBody.innerHTML = formHTML;
+function openModal(title, formHTML) {
+    const { modal, modalTitle, modalBody } = getModalParts();
+    if (!modal || !modalTitle || !modalBody) return false;
+
+    modalTitle.innerHTML = '<i class="bi bi-plus-circle-fill" style="color: var(--color-accent); margin-right: 8px;"></i>' + (title || 'Add Item');
+    modalBody.innerHTML = formHTML || '';
+
     modal.classList.add('show', 'is-open', 'active');
     modal.style.display = 'flex';
     modal.setAttribute('aria-modal', 'true');
     modal.setAttribute('role', 'dialog');
     document.body.classList.add('modal-open');
+    return true;
 }
 
 function closeModal() {
-    const modal = document.getElementById('addModal');
+    const { modal, modalBody } = getModalParts();
     if (!modal) return;
+
     modal.classList.remove('show', 'is-open', 'active');
     modal.style.display = 'none';
-    const modalBody = document.getElementById('modalBody');
     if (modalBody) modalBody.innerHTML = '';
     document.body.classList.remove('modal-open');
 }
-
-// Close modal when clicking outside
-const modal = document.getElementById('addModal');
-if (modal) {
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            closeModal();
-        }
-    });
-}
-
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        closeModal();
-    }
-});
 
 function getTemplateHtml(templateId) {
     const tpl = document.getElementById(templateId);
@@ -339,12 +330,26 @@ function getTemplateHtml(templateId) {
 
 function openTemplateModal(templateId, title) {
     const formHTML = getTemplateHtml(templateId);
-    if (formHTML) {
-        openModal(title, formHTML);
-        return true;
-    }
-    return false;
+    if (!formHTML) return false;
+    return openModal(title, formHTML);
 }
+
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.openTemplateModal = openTemplateModal;
+
+(function bindModalCloseHandlers() {
+    const { modal } = getModalParts();
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeModal();
+    });
+})();
 
 function initMaintenanceTemplate(modalBody) {
     const fleetSelect = modalBody?.querySelector('#fleetSelect');
@@ -364,6 +369,8 @@ function initMaintenanceTemplate(modalBody) {
 
 function initReceivingTemplate(modalBody) {
     const poSelect = modalBody?.querySelector('.receiving-po-select');
+    const receivingForm = modalBody?.querySelector('.receiving-modal-form');
+    const poItemsUrl = receivingForm?.getAttribute('data-po-items-url') || '../../controllers/get_po_items.php';
     const tableBody = modalBody?.querySelector('.receiving-po-items-table tbody');
     const saveBtn = modalBody?.querySelector('.receiving-save-btn');
     const qcStatus = modalBody?.querySelector('.receiving-qc-status');
@@ -392,7 +399,8 @@ function initReceivingTemplate(modalBody) {
         setTableMessage('Loading...');
 
         try {
-            const res = await fetch(`../../controllers/get_po_items.php?po_id=${encodeURIComponent(poId)}`);
+            const sep = poItemsUrl.includes('?') ? '&' : '?';
+            const res = await fetch(`${poItemsUrl}${sep}po_id=${encodeURIComponent(poId)}`);
             const contentType = res.headers.get('content-type') || '';
 
             if (!res.ok || !contentType.includes('application/json')) {
@@ -436,6 +444,33 @@ function initReceivingTemplate(modalBody) {
     });
 }
 
+function initAssetAddTemplate(modalBody) {
+    const switchRoot = modalBody.querySelector('#assetCreateSwitch');
+    if (!switchRoot) return;
+
+    const tabButtons = Array.from(switchRoot.querySelectorAll('.tab-btn[data-pane]'));
+    const panes = Array.from(modalBody.querySelectorAll('.asset-add-pane'));
+    if (tabButtons.length === 0 || panes.length === 0) return;
+
+    const activate = (paneId) => {
+        tabButtons.forEach((btn) => btn.classList.toggle('active', btn.getAttribute('data-pane') === paneId));
+        panes.forEach((pane) => pane.classList.toggle('d-none', pane.id !== paneId));
+    };
+
+    tabButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const paneId = btn.getAttribute('data-pane');
+            if (paneId) activate(paneId);
+        });
+    });
+
+    const requestedPane = window.__assetModalDefaultPane || '';
+    const fromTrigger = requestedPane && panes.some((pane) => pane.id === requestedPane) ? requestedPane : null;
+    const activeBtn = tabButtons.find((btn) => btn.classList.contains('active')) || tabButtons[0];
+    const initialPane = fromTrigger || (activeBtn ? activeBtn.getAttribute('data-pane') : null);
+    if (initialPane) activate(initialPane);
+    window.__assetModalDefaultPane = '';
+}
 function initializeModalTemplate(templateId) {
     const modalBody = document.getElementById('modalBody');
     if (!modalBody) return;
@@ -448,6 +483,9 @@ function initializeModalTemplate(templateId) {
     }
     if (templateId === 'addProcurementRequestForm') {
         initProcurementRequestTemplate(modalBody);
+    }
+    if (templateId === 'addAssetForm') {
+        initAssetAddTemplate(modalBody);
     }
 }
 
@@ -598,7 +636,10 @@ function openAddProjectModal() {
 
 // Function to open add asset modal
 function openAddAssetModal() {
-    openTemplateModal('addAssetForm', 'Add Asset');
+    window.__assetModalDefaultPane = 'assetAddPane';
+    if (openTemplateModal('addAssetForm', 'Choose Asset Section')) {
+        initializeModalTemplate('addAssetForm');
+    }
 }
 
 // Function to open add procurement request modal
@@ -608,7 +649,10 @@ function openAddProcurementRequestModal() {
 
 // Function to open add fleet vehicle modal
 function openAddFleetModal() {
-    openTemplateModal('addFleetForm', 'Add Vehicle');
+    window.__assetModalDefaultPane = 'vehicleAddPane';
+    if (openTemplateModal('addAssetForm', 'Choose Asset Section')) {
+        initializeModalTemplate('addAssetForm');
+    }
 }
 
 // Function to open add maintenance log modal
@@ -632,6 +676,10 @@ document.addEventListener('click', (e) => {
     const templateId = trigger.getAttribute('data-modal-form');
     const title = trigger.getAttribute('data-modal-title') || 'Add Item';
     const bsModalId = trigger.getAttribute('data-bs-modal-id');
+
+    if (templateId === 'addAssetForm') {
+        window.__assetModalDefaultPane = trigger.getAttribute('data-asset-pane') || '';
+    }
 
     if (templateId && openTemplateModal(templateId, title)) {
         initializeModalTemplate(templateId);
@@ -872,6 +920,35 @@ if (document.readyState === 'loading') {
     initLiveTimeAgo();
 }
 
+
+function ensureTaskToast() {
+    let toast = document.getElementById('taskStatusToast');
+    if (toast) return toast;
+
+    toast = document.createElement('div');
+    toast.id = 'taskStatusToast';
+    toast.className = 'task-status-toast';
+    toast.innerHTML = '<i class="bi bi-check-circle-fill" aria-hidden="true"></i><span class="task-status-toast-text">Task completed!</span>';
+    document.body.appendChild(toast);
+    return toast;
+}
+
+let taskToastTimer = null;
+function showTaskStatusToast(message) {
+    const toast = ensureTaskToast();
+    const text = toast.querySelector('.task-status-toast-text');
+    if (text) text.textContent = message;
+
+    toast.classList.add('show');
+
+    if (taskToastTimer) {
+        window.clearTimeout(taskToastTimer);
+    }
+
+    taskToastTimer = window.setTimeout(() => {
+        toast.classList.remove('show');
+    }, 1700);
+}
 // --- Dashboard pending tasks interactions (local persistence) ---
 function initPendingTasks() {
     const items = document.querySelectorAll('.dashboard-page .pending-task-item[data-task-key]');
@@ -921,6 +998,7 @@ function initPendingTasks() {
             doneMap[key] = next;
             renderItem(item, next);
             persist();
+            showTaskStatusToast(next ? 'Task completed!' : 'Task reopened');
         });
 
         item.addEventListener('click', (event) => {
@@ -938,6 +1016,11 @@ if (document.readyState === 'loading') {
 } else {
     initPendingTasks();
 }
+
+
+
+
+
 
 
 

@@ -6,7 +6,7 @@ require_once __DIR__ . "/../../config/permissions.php";
 require_once __DIR__ . "/../helpers/badges.php";
 
 requireLogin();
-requireRole(['admin','manager','project_staff']);
+requireRole(['admin','manager','project_staff','asset']);
 
 $userRole = $_SESSION['user']['role'] ?? '';
 $canAdd = hasPermission($userRole, 'projects', 'add');
@@ -101,6 +101,7 @@ foreach ($fleetReportRows as $r) {
       <?php if ($canAdd): ?>
       <div id="addFleetForm" style="display:none;">
         <form method="POST" action="../../controllers/FleetController.php" class="row g-3">
+          <input type="hidden" name="return" value="../views/project/fleet.php?tab=vehicles">
           <div class="col-md-5"><label class="form-label">Vehicle Name</label><input type="text" name="vehicle_name" class="form-control" placeholder="e.g. Delivery Truck" required></div>
           <div class="col-md-4"><label class="form-label">Plate Number</label><input type="text" name="plate_number" class="form-control" placeholder="ABC-1234" required></div>
           <div class="col-md-3"><label class="form-label">Status</label><select name="status" class="form-select"><option value="Available">Available</option><option value="In Use">In Use</option><option value="Maintenance">Maintenance</option></select></div>
@@ -122,7 +123,7 @@ foreach ($fleetReportRows as $r) {
                 <td><span class="badge <?= badge_class($v['status']) ?>"><?= htmlspecialchars($v['status']) ?></span></td>
                 <td class="text-end">
                   <?php if ($canEdit): ?><a href="fleet_edit.php?id=<?= (int)$v['id'] ?>" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i> Edit</a><?php endif; ?>
-                  <?php if ($canDelete): ?><a href="../../controllers/FleetController.php?delete=<?= (int)$v['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this vehicle?')"><i class="bi bi-trash"></i> Delete</a><?php endif; ?>
+                  <?php if ($canDelete): ?><a href="../../controllers/FleetController.php?delete=<?= (int)$v['id'] ?>&return=<?= urlencode('../views/project/fleet.php?tab=vehicles') ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this vehicle?')"><i class="bi bi-trash"></i> Delete</a><?php endif; ?>
                   <?php if (!$canEdit && !$canDelete): ?><span class="text-muted">-</span><?php endif; ?>
                 </td>
               </tr>

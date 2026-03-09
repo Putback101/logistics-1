@@ -140,6 +140,128 @@ Projects Module:
 (Coming to other modules)
 ```
 
+### External Procurement Intake (New)
+
+`logistics-1` can now accept procurement requests from other modules/systems through:
+
+`POST /controllers/ProcurementIntakeController.php`
+
+Authentication:
+- Header `Authorization: Bearer <PROCUREMENT_INTAKE_TOKEN>` or `X-Procurement-Token: <PROCUREMENT_INTAKE_TOKEN>`
+- Configure token using environment variable `PROCUREMENT_INTAKE_TOKEN`
+
+Sample JSON payload:
+
+```json
+{
+  "source_module": "warehousing",
+  "source_system": "core-1",
+  "source_reference": "WH-REQ-20260309-001",
+  "budget_year": 2026,
+  "requested_by": 7,
+  "lines": [
+    {
+      "item_id": 1,
+      "item_name": "Pallet Jack Wheel",
+      "quantity": 4,
+      "supplier": "ABC Industrial",
+      "estimated_amount": 24000
+    }
+  ]
+}
+```
+
+### External Warehousing Intake (New)
+
+`logistics-1` can now accept warehousing requests from other modules/systems through:
+
+`POST /controllers/WarehousingIntakeController.php`
+
+Authentication:
+- Header `Authorization: Bearer <WAREHOUSING_INTAKE_TOKEN>` or `X-Warehousing-Token: <WAREHOUSING_INTAKE_TOKEN>`
+- If `WAREHOUSING_INTAKE_TOKEN` is not set, it falls back to `PROCUREMENT_INTAKE_TOKEN`
+
+Sample JSON payload:
+
+```json
+{
+  "source_module": "mro",
+  "source_system": "core-2",
+  "source_reference": "MRO-SPARE-20260309-014",
+  "request_type": "spare_parts",
+  "priority": "High",
+  "requested_by": 6,
+  "notes": "Needed for scheduled maintenance",
+  "lines": [
+    {
+      "item_id": 3,
+      "item_name": "Brake Pad Set",
+      "quantity": 2
+    }
+  ]
+}
+```
+
+### External MRO Intake (New)
+
+`logistics-1` can now accept maintenance/repair requests from other modules/systems through:
+
+`POST /controllers/MroIntakeController.php`
+
+Authentication:
+- Header `Authorization: Bearer <MRO_INTAKE_TOKEN>` or `X-Mro-Token: <MRO_INTAKE_TOKEN>`
+- If `MRO_INTAKE_TOKEN` is not set, it falls back to `PROCUREMENT_INTAKE_TOKEN`
+
+Sample JSON payload:
+
+```json
+{
+  "source_module": "fleet_management",
+  "source_system": "core-2",
+  "source_reference": "FLT-MAINT-20260309-023",
+  "type": "Maintenance",
+  "priority": "High",
+  "requested_by": 2,
+  "lines": [
+    {
+      "fleet_id": 1,
+      "description": "Schedule preventive maintenance for Vehicle 1",
+      "cost": 0
+    }
+  ]
+}
+```
+
+### External Asset Intake (New)
+
+`logistics-1` can now accept asset requests from other modules/systems through:
+
+`POST /controllers/AssetIntakeController.php`
+
+Authentication:
+- Header `Authorization: Bearer <ASSET_INTAKE_TOKEN>` or `X-Asset-Token: <ASSET_INTAKE_TOKEN>`
+- If `ASSET_INTAKE_TOKEN` is not set, it falls back to `PROCUREMENT_INTAKE_TOKEN`
+
+Sample JSON payload:
+
+```json
+{
+  "source_module": "warehousing",
+  "source_system": "core-1",
+  "source_reference": "WH-ASSET-20260309-004",
+  "request_type": "registration",
+  "priority": "Normal",
+  "requested_by": 5,
+  "lines": [
+    {
+      "asset_name": "Hydraulic Jack",
+      "asset_category": "Tools",
+      "quantity": 2
+    }
+  ]
+}
+```
+
 ### User Interface
 
 ```

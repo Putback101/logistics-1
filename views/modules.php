@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once __DIR__ . "/../config/auth.php";
 require_once __DIR__ . "/../config/database.php";
 require_once __DIR__ . "/../config/app.php";
@@ -25,7 +25,7 @@ $role = $_SESSION['user']['role'] ?? '';
       <!-- PROCUREMENT MODULE -->
       <?php if (in_array($role, ['admin', 'manager', 'procurement_staff'])): ?>
       <div style="background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%); border: 2px solid #48bb78; border-radius: 1rem; padding: 2rem; transition: all 0.3s ease; cursor: pointer;" onmouseover="this.style.boxShadow='0 0 30px rgba(72, 187, 120, 0.3)'; this.style.transform='translateY(-5px)';" onmouseout="this.style.boxShadow='none'; this.style.transform='translateY(0)';">
-        <div style="font-size: 3rem; margin-bottom: 1rem; color: #48bb78;">ðŸ“‹</div>
+        <div style="font-size: 3rem; margin-bottom: 1rem; color: #48bb78;">📋</div>
         <h3 style="font-size: 1.5rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem;">Procurement</h3>
         <p style="color: #a0aec0; font-size: 0.95rem; margin-bottom: 1.5rem;">Manage purchase orders, suppliers, budgets, and procurement reports.</p>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
@@ -40,7 +40,7 @@ $role = $_SESSION['user']['role'] ?? '';
       <!-- PROJECTS MODULE -->
       <?php if (in_array($role, ['admin', 'manager', 'project_staff'])): ?>
       <div style="background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%); border: 2px solid #48bb78; border-radius: 1rem; padding: 2rem; transition: all 0.3s ease; cursor: pointer;" onmouseover="this.style.boxShadow='0 0 30px rgba(72, 187, 120, 0.3)'; this.style.transform='translateY(-5px)';" onmouseout="this.style.boxShadow='none'; this.style.transform='translateY(0)';">
-        <div style="font-size: 3rem; margin-bottom: 1rem; color: #48bb78;">ðŸ“Š</div>
+        <div style="font-size: 3rem; margin-bottom: 1rem; color: #48bb78;">📊</div>
         <h3 style="font-size: 1.5rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem;">Projects</h3>
         <p style="color: #a0aec0; font-size: 0.95rem; margin-bottom: 1.5rem;">Manage projects, timelines, tasks, and resource allocation.</p>
         <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem;">
@@ -52,11 +52,11 @@ $role = $_SESSION['user']['role'] ?? '';
       <!-- ASSETS MODULE -->
       <?php if (in_array($role, ['admin', 'manager', 'asset'])): ?>
       <div style="background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%); border: 2px solid #48bb78; border-radius: 1rem; padding: 2rem; transition: all 0.3s ease; cursor: pointer;" onmouseover="this.style.boxShadow='0 0 30px rgba(72, 187, 120, 0.3)'; this.style.transform='translateY(-5px)';" onmouseout="this.style.boxShadow='none'; this.style.transform='translateY(0)';">
-        <div style="font-size: 3rem; margin-bottom: 1rem; color: #48bb78;">ðŸš—</div>
+        <div style="font-size: 3rem; margin-bottom: 1rem; color: #48bb78;">🚗</div>
         <h3 style="font-size: 1.5rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem;">Assets</h3>
         <p style="color: #a0aec0; font-size: 0.95rem; margin-bottom: 1.5rem;">Manage fleet, track assets, and monitor equipment performance.</p>
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem;">
-          <a href="<?= $base ?>/views/project/fleet.php" style="padding: 0.75rem; background: #2d3748; border: 1px solid #4a5568; border-radius: 0.5rem; color: #e2e8f0; text-decoration: none; text-align: center; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease;" onmouseover="this.style.background='#48bb78'; this.style.color='#000';" onmouseout="this.style.background='#2d3748'; this.style.color='#e2e8f0';">Fleet</a>
+          <a href="<?= $base ?>/views/project/fleet.php?tab=vehicles" style="padding: 0.75rem; background: #2d3748; border: 1px solid #4a5568; border-radius: 0.5rem; color: #e2e8f0; text-decoration: none; text-align: center; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease;" onmouseover="this.style.background='#48bb78'; this.style.color='#000';" onmouseout="this.style.background='#2d3748'; this.style.color='#e2e8f0';">Fleet</a>
           <a href="<?= $base ?>/views/asset/asset.php?tab=tracking" style="padding: 0.75rem; background: #2d3748; border: 1px solid #4a5568; border-radius: 0.5rem; color: #e2e8f0; text-decoration: none; text-align: center; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease;" onmouseover="this.style.background='#48bb78'; this.style.color='#000';" onmouseout="this.style.background='#2d3748'; this.style.color='#e2e8f0';">Tracking</a>
           <a href="<?= $base ?>/views/asset/asset.php?tab=monitoring" style="padding: 0.75rem; background: #2d3748; border: 1px solid #4a5568; border-radius: 0.5rem; color: #e2e8f0; text-decoration: none; text-align: center; font-size: 0.85rem; font-weight: 600; transition: all 0.2s ease;" onmouseover="this.style.background='#48bb78'; this.style.color='#000';" onmouseout="this.style.background='#2d3748'; this.style.color='#e2e8f0';">Monitoring</a>
         </div>
@@ -66,7 +66,7 @@ $role = $_SESSION['user']['role'] ?? '';
       <!-- MRO MODULE -->
       <?php if (in_array($role, ['admin', 'manager', 'mro_staff'])): ?>
       <div style="background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%); border: 2px solid #48bb78; border-radius: 1rem; padding: 2rem; transition: all 0.3s ease; cursor: pointer;" onmouseover="this.style.boxShadow='0 0 30px rgba(72, 187, 120, 0.3)'; this.style.transform='translateY(-5px)';" onmouseout="this.style.boxShadow='none'; this.style.transform='translateY(0)';">
-        <div style="font-size: 3rem; margin-bottom: 1rem; color: #48bb78;">ðŸ”§</div>
+        <div style="font-size: 3rem; margin-bottom: 1rem; color: #48bb78;">🔧</div>
         <h3 style="font-size: 1.5rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem;">MRO</h3>
         <p style="color: #a0aec0; font-size: 0.95rem; margin-bottom: 1.5rem;">Manage maintenance and repair operations for equipment.</p>
         <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem;">
@@ -78,7 +78,7 @@ $role = $_SESSION['user']['role'] ?? '';
       <!-- WAREHOUSING MODULE -->
       <?php if (in_array($role, ['admin', 'manager', 'warehouse_staff'])): ?>
       <div style="background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%); border: 2px solid #48bb78; border-radius: 1rem; padding: 2rem; transition: all 0.3s ease; cursor: pointer;" onmouseover="this.style.boxShadow='0 0 30px rgba(72, 187, 120, 0.3)'; this.style.transform='translateY(-5px)';" onmouseout="this.style.boxShadow='none'; this.style.transform='translateY(0)';">
-        <div style="font-size: 3rem; margin-bottom: 1rem; color: #48bb78;">ðŸ“¦</div>
+        <div style="font-size: 3rem; margin-bottom: 1rem; color: #48bb78;">📦</div>
         <h3 style="font-size: 1.5rem; font-weight: 700; color: #fff; margin-bottom: 0.5rem;">Warehousing</h3>
         <p style="color: #a0aec0; font-size: 0.95rem; margin-bottom: 1.5rem;">Manage inventory, receiving, and stock reconciliation.</p>
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem;">

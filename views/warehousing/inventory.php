@@ -4,6 +4,7 @@ require_once __DIR__ . "/../../config/database.php";
 require_once __DIR__ . "/../../config/permissions.php";
 require_once __DIR__ . "/../../models/Inventory.php";
 require_once __DIR__ . "/../../models/Receiving.php";
+require_once __DIR__ . "/../../models/WarehousingRequest.php";
 
 requireLogin();
 requireRole(['admin','manager','warehouse_staff']);
@@ -13,6 +14,7 @@ $canAdd = hasPermission($userRole, 'warehousing', 'add');
 $canEdit = hasPermission($userRole, 'warehousing', 'edit');
 $canDelete = hasPermission($userRole, 'warehousing', 'delete');
 $canReconcile = $canEdit;
+$canCreateAssetFromWarehouse = hasPermission($userRole, 'assets', 'add');
 
 $activeTab = $_GET['tab'] ?? 'inventory';
 if (!in_array($activeTab, ['inventory', 'reconciliation'], true)) {
@@ -23,6 +25,18 @@ $inventory = new Inventory($pdo);
 $items = $inventory->getAll();
 $recv = new Receiving($pdo);
 $receivingRows = $recv->getAll();
+$warehousingRequests = [];
+$hasWarehousingRequestsTable = false;
+try {
+  $hasWarehousingRequestsTable = (int)$pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'warehousing_requests'")->fetchColumn() > 0;
+  if ($hasWarehousingRequestsTable) {
+    $wrModel = new WarehousingRequest($pdo);
+    $warehousingRequests = $wrModel->getAll();
+  }
+} catch (Throwable $e) {
+  $hasWarehousingRequestsTable = false;
+  $warehousingRequests = [];
+}
 
 $receivablePos = $pdo->query("\n  SELECT po.id, po.po_number
   FROM purchase_orders po
@@ -57,6 +71,12 @@ foreach ($items as $invRow) {
 }
 $receivingLogTotal = count($receivingRows);
 $pendingReceipts = count($receivablePos);
+$pendingInboundRequests = 0;
+foreach ($warehousingRequests as $wr) {
+  if (($wr['status'] ?? '') === 'Pending') {
+    $pendingInboundRequests++;
+  }
+}
 
 // Reconciliation data
 $reconItems = $pdo->query("\n  SELECT inv.id, inv.item_name, inv.stock, it.category, it.unit
@@ -155,6 +175,12 @@ if ($hasItemId) {
         <div class="module-kpi-detail">POs awaiting receipt</div>
         <div class="module-kpi-icon"><i class="fas fa-truck-loading"></i></div>
       </div>
+      <div class="module-kpi-card">
+        <div class="module-kpi-label">Inbound Requests</div>
+        <div class="module-kpi-value"><?= $pendingInboundRequests ?></div>
+        <div class="module-kpi-detail">Pending external/internal asks</div>
+        <div class="module-kpi-icon"><i class="fas fa-inbox"></i></div>
+      </div>
     </div>
 
     <div class="tab-navigation mb-4">
@@ -243,7 +269,6 @@ if ($hasItemId) {
         </form>
       </div>
       <?php endif; ?>
-
       <div class="table-card mb-4">
         <h5 class="mb-3">Inventory List</h5>
         <div class="table-responsive">
@@ -269,7 +294,10 @@ if ($hasItemId) {
                   <?php if ($canDelete): ?>
                     <a href="../../controllers/InventoryController.php?delete=<?= (int)$i['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this item?')"><i class="bi bi-trash"></i></a>
                   <?php endif; ?>
-                  <?php if (!$canEdit && !$canDelete): ?>
+                  <?php if ($canCreateAssetFromWarehouse): ?>
+                    <a href="../asset/asset.php?tab=registry&source_inventory_id=<?= (int)$i['id'] ?>" class="btn btn-sm btn-outline-primary" title="Create asset from this stock"><i class="bi bi-box-arrow-up-right"></i></a>
+                  <?php endif; ?>
+                  <?php if (!$canEdit && !$canDelete && !$canCreateAssetFromWarehouse): ?>
                     <span class="text-muted">-</span>
                   <?php endif; ?>
                 </td>
@@ -311,6 +339,62 @@ if ($hasItemId) {
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div class="table-card mt-4">
+        <h5 class="mb-3">Inbound Warehousing Requests</h5>
+        <?php if (!$hasWarehousingRequestsTable): ?>
+          <p class="text-muted mb-0">Inbound queue is not enabled yet. Run migration `2026-03-09-warehousing-external-intake.sql`.</p>
+        <?php else: ?>
+          <div class="table-responsive">
+            <table class="table table-striped table-hover align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>Request Ref</th>
+                  <th>Type</th>
+                  <th>Source</th>
+                  <th>Item</th>
+                  <th>Qty</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php if (empty($warehousingRequests)): ?>
+                  <tr><td colspan="8" class="text-center text-muted">No inbound requests yet.</td></tr>
+                <?php endif; ?>
+                <?php foreach ($warehousingRequests as $wr): ?>
+                  <?php
+                    $sourceLabel = strtoupper((string)($wr['source_module'] ?? 'UNKNOWN'));
+                    if (!empty($wr['source_system'])) {
+                      $sourceLabel .= ' / ' . (string)$wr['source_system'];
+                    }
+                    $itemLabel = trim((string)($wr['master_item_name'] ?? ''));
+                    if ($itemLabel === '') {
+                      $itemLabel = (string)($wr['item_name'] ?? '');
+                    }
+                  ?>
+                  <tr>
+                    <td>
+                      <?= htmlspecialchars((string)($wr['request_ref'] ?? '-')) ?>
+                      <?php if (!empty($wr['source_reference'])): ?>
+                        <div class="text-muted small"><?= htmlspecialchars((string)$wr['source_reference']) ?></div>
+                      <?php endif; ?>
+                    </td>
+                    <td><?= htmlspecialchars((string)($wr['request_type'] ?? 'replenishment')) ?></td>
+                    <td><?= htmlspecialchars($sourceLabel) ?></td>
+                    <td><?= htmlspecialchars($itemLabel) ?></td>
+                    <td><?= (int)($wr['quantity'] ?? 0) ?></td>
+                    <td><?= htmlspecialchars((string)($wr['priority'] ?? 'Normal')) ?></td>
+                    <td><span class="badge <?= ($wr['status'] ?? 'Pending') === 'Pending' ? 'bg-warning text-dark' : 'bg-secondary' ?>"><?= htmlspecialchars((string)($wr['status'] ?? 'Pending')) ?></span></td>
+                    <td class="text-muted small"><?= htmlspecialchars((string)($wr['created_at'] ?? '')) ?></td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        <?php endif; ?>
       </div>
 
       <?php if ($canEdit): ?>
@@ -406,3 +490,6 @@ if ($hasItemId) {
 </main>
 
 <?php include "../layout/footer.php"; ?>
+
+
+

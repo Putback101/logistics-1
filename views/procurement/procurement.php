@@ -33,6 +33,12 @@ $canApproveReq = in_array($userRole, ['admin','manager'], true);
 $requests = $procurement->getAll();
 $budgets = $budget->getAll();
 $requestBudgetSummary = $procurement->getBudgetRequestSummary();
+$budgetRequests = $budget->listRequests();
+$linkedSpentByYear = $budget->getLinkedSpentByYear();
+$resolveBudgetSpent = static function(array $budgetRow) use ($linkedSpentByYear): float {
+  $year = (int)($budgetRow['year'] ?? 0);
+  return (float)($budgetRow['spent'] ?? 0) + (float)($linkedSpentByYear[$year] ?? 0);
+};
 $suppliers = $supplier->getAll();
 $itemsMaster = $itemModel->getAll();
 $pos = $po->getAll();
@@ -48,7 +54,10 @@ foreach ($requests as $r) {
   } else {
     $pendingRequests++;
   }
-  $totalRequestedAmount += (float)($r['estimated_amount'] ?? 0);
+  $estimateAmount = (float)($r['estimated_amount'] ?? 0);
+  $linkedPoTotal = (float)($r['linked_po_total'] ?? 0);
+  $displayAmount = (!empty($r['po_number']) && $linkedPoTotal > 0) ? $linkedPoTotal : $estimateAmount;
+  $totalRequestedAmount += $displayAmount;
 }
 
 $openPurchaseOrders = 0;
@@ -61,10 +70,214 @@ foreach ($pos as $p) {
 $supplierCount = count($suppliers);
 
 $activeTab = isset($_GET['tab']) ? $_GET['tab'] : 'purchase-orders';
-if (!in_array($activeTab, ['purchase-orders','suppliers','budget','reports','approvals'], true)) {
+if (!in_array($activeTab, ['purchase-orders','suppliers','items','budget','reports','approvals'], true)) {
   $activeTab = 'purchase-orders';
 }
 $returnTo = 'procurement.php?tab=' . urlencode($activeTab);
+if ($activeTab === 'reports' && (($_GET['export'] ?? '') === 'csv')) {
+  $defaultReportFrom = date('Y-m-01');
+  $defaultReportTo = date('Y-m-d');
+
+  $reportFromInput = (string)($_GET['report_from'] ?? $defaultReportFrom);
+  $reportToInput = (string)($_GET['report_to'] ?? $defaultReportTo);
+
+  if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $reportFromInput)) {
+    $reportFromInput = $defaultReportFrom;
+  }
+  if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $reportToInput)) {
+    $reportToInput = $defaultReportTo;
+  }
+
+  $fromTs = strtotime($reportFromInput . ' 00:00:00') ?: strtotime($defaultReportFrom . ' 00:00:00');
+  $toTs = strtotime($reportToInput . ' 23:59:59') ?: strtotime($defaultReportTo . ' 23:59:59');
+
+  if ($fromTs > $toTs) {
+    $tmp = $fromTs;
+    $fromTs = $toTs;
+    $toTs = $tmp;
+    $reportFromInput = date('Y-m-d', $fromTs);
+    $reportToInput = date('Y-m-d', $toTs);
+  }
+
+  $inRange = static function ($dateValue) use ($fromTs, $toTs): bool {
+    $ts = strtotime((string)$dateValue);
+    if ($ts === false) {
+      return false;
+    }
+    return $ts >= $fromTs && $ts <= $toTs;
+  };
+
+  $requestCount = 0;
+  $requestApproved = 0;
+  $requestPending = 0;
+  $requestRejected = 0;
+  $requestDelivered = 0;
+  $requestValue = 0.0;
+
+  $poCount = 0;
+  $poValue = 0.0;
+  $poOpen = 0;
+  $poReceived = 0;
+
+  $monthlyPo = [];
+  $supplierMetrics = [];
+
+  foreach ($requests as $r) {
+    if (!$inRange($r['created_at'] ?? null)) {
+      continue;
+    }
+
+    $requestCount++;
+    $status = strtolower((string)($r['status'] ?? 'Pending'));
+    if ($status === 'approved') {
+      $requestApproved++;
+    } elseif ($status === 'pending') {
+      $requestPending++;
+    } elseif ($status === 'rejected') {
+      $requestRejected++;
+    } elseif ($status === 'delivered') {
+      $requestDelivered++;
+    }
+
+    $estimateAmount = (float)($r['estimated_amount'] ?? 0);
+    $linkedPoTotal = (float)($r['linked_po_total'] ?? 0);
+    $rowValue = (!empty($r['po_number']) && $linkedPoTotal > 0) ? $linkedPoTotal : $estimateAmount;
+    $requestValue += $rowValue;
+
+    $supplierName = trim((string)($r['supplier'] ?? ''));
+    if ($supplierName === '') {
+      $supplierName = 'Unassigned Supplier';
+    }
+
+    if (!isset($supplierMetrics[$supplierName])) {
+      $supplierMetrics[$supplierName] = [
+        'supplier' => $supplierName,
+        'requests' => 0,
+        'approved_requests' => 0,
+        'po_count' => 0,
+        'po_value' => 0.0,
+        'requested_value' => 0.0,
+      ];
+    }
+
+    $supplierMetrics[$supplierName]['requests']++;
+    $supplierMetrics[$supplierName]['requested_value'] += $rowValue;
+    if ($status === 'approved') {
+      $supplierMetrics[$supplierName]['approved_requests']++;
+    }
+  }
+
+  foreach ($pos as $p) {
+    if (!$inRange($p['created_at'] ?? null)) {
+      continue;
+    }
+
+    $poCount++;
+    $poAmount = (float)($p['total_amount'] ?? 0);
+    $poValue += $poAmount;
+
+    $poStatus = strtolower((string)($p['status'] ?? 'Draft'));
+    if ($poStatus === 'received') {
+      $poReceived++;
+    } else {
+      $poOpen++;
+    }
+
+    $monthKey = date('Y-m', strtotime((string)$p['created_at']));
+    if (!isset($monthlyPo[$monthKey])) {
+      $monthlyPo[$monthKey] = 0.0;
+    }
+    $monthlyPo[$monthKey] += $poAmount;
+
+    $supplierName = trim((string)($p['supplier_name'] ?? $p['supplier'] ?? ''));
+    if ($supplierName === '') {
+      $supplierName = 'Unassigned Supplier';
+    }
+
+    if (!isset($supplierMetrics[$supplierName])) {
+      $supplierMetrics[$supplierName] = [
+        'supplier' => $supplierName,
+        'requests' => 0,
+        'approved_requests' => 0,
+        'po_count' => 0,
+        'po_value' => 0.0,
+        'requested_value' => 0.0,
+      ];
+    }
+
+    $supplierMetrics[$supplierName]['po_count']++;
+    $supplierMetrics[$supplierName]['po_value'] += $poAmount;
+  }
+
+  $rangeDays = max(1, (int)floor(($toTs - $fromTs) / 86400) + 1);
+  $approvalRate = $requestCount > 0 ? (($requestApproved / $requestCount) * 100) : 0;
+  $avgPoValue = $poCount > 0 ? ($poValue / $poCount) : 0;
+  $avgDailySpend = $poValue / $rangeDays;
+
+  $supplierRows = array_values($supplierMetrics);
+  usort($supplierRows, static function (array $a, array $b): int {
+    $cmp = ($b['po_value'] <=> $a['po_value']);
+    if ($cmp !== 0) {
+      return $cmp;
+    }
+    return ($b['requests'] <=> $a['requests']);
+  });
+
+  $filename = 'procurement-report-' . date('Ymd-His') . '.csv';
+  header('Content-Type: text/csv; charset=UTF-8');
+  header('Content-Disposition: attachment; filename="' . $filename . '"');
+
+  $out = fopen('php://output', 'w');
+  if ($out !== false) {
+    fputcsv($out, ['Procurement Report']);
+    fputcsv($out, ['From', date('Y-m-d', $fromTs)]);
+    fputcsv($out, ['To', date('Y-m-d', $toTs)]);
+    fputcsv($out, []);
+
+    fputcsv($out, ['Summary']);
+    fputcsv($out, ['Requests Logged', $requestCount]);
+    fputcsv($out, ['Approved Requests', $requestApproved]);
+    fputcsv($out, ['Pending Requests', $requestPending]);
+    fputcsv($out, ['Rejected Requests', $requestRejected]);
+    fputcsv($out, ['Delivered Requests', $requestDelivered]);
+    fputcsv($out, ['Approval Rate %', number_format($approvalRate, 1)]);
+    fputcsv($out, ['PO Count', $poCount]);
+    fputcsv($out, ['PO Received', $poReceived]);
+    fputcsv($out, ['PO Open', $poOpen]);
+    fputcsv($out, ['Total Requested Value', number_format($requestValue, 2, '.', '')]);
+    fputcsv($out, ['Total PO Value', number_format($poValue, 2, '.', '')]);
+    fputcsv($out, ['Average PO Value', number_format($avgPoValue, 2, '.', '')]);
+    fputcsv($out, ['Average Daily PO Spend', number_format($avgDailySpend, 2, '.', '')]);
+    fputcsv($out, []);
+
+    fputcsv($out, ['Monthly PO Spend']);
+    fputcsv($out, ['Month', 'PO Spend']);
+    $cursor = strtotime(date('Y-m-01', $fromTs));
+    $endCursor = strtotime(date('Y-m-01', $toTs));
+    while ($cursor <= $endCursor) {
+      $mk = date('Y-m', $cursor);
+      fputcsv($out, [date('M Y', $cursor), number_format((float)($monthlyPo[$mk] ?? 0), 2, '.', '')]);
+      $cursor = strtotime('+1 month', $cursor);
+    }
+    fputcsv($out, []);
+
+    fputcsv($out, ['Supplier Performance']);
+    fputcsv($out, ['Supplier', 'Requests', 'Approved Requests', 'PO Count', 'Requested Value', 'PO Value']);
+    foreach ($supplierRows as $row) {
+      fputcsv($out, [
+        $row['supplier'],
+        (int)$row['requests'],
+        (int)$row['approved_requests'],
+        (int)$row['po_count'],
+        number_format((float)$row['requested_value'], 2, '.', ''),
+        number_format((float)$row['po_value'], 2, '.', ''),
+      ]);
+    }
+
+    fclose($out);
+  }
+  exit;
+}
 
 $poId = 0;
 if (isset($_GET['po_id']) && ctype_digit((string)$_GET['po_id'])) {
@@ -120,7 +333,11 @@ if ($poId > 0) {
         <button class="btn btn-primary" data-modal-form="addItemForm" data-modal-title="Add Item">
           <i class="bi bi-plus-lg"></i> New Item
         </button>
-      <?php elseif ($activeTab !== 'suppliers' && $activeTab !== 'items' && $canAdd): ?>
+      <?php elseif ($activeTab === 'budget' && $canAdd): ?>
+        <button class="btn btn-primary" data-modal-form="requestBudgetForm" data-modal-title="Request Budget">
+          <i class="bi bi-plus-lg"></i> Request Budget
+        </button>
+      <?php elseif ($activeTab !== 'suppliers' && $activeTab !== 'items' && $activeTab !== 'budget' && $canAdd): ?>
         <button class="btn btn-primary" data-modal-form="addProcurementRequestForm" data-modal-title="New Request">
           <i class="bi bi-plus-lg"></i> New Request
         </button>
@@ -148,7 +365,7 @@ if ($poId > 0) {
       </div>
       <div class="module-kpi-card">
         <div class="module-kpi-label">Requested Budget</div>
-        <div class="module-kpi-value">â‚±<?= number_format($totalRequestedAmount, 2) ?></div>
+        <div class="module-kpi-value">&#8369;<?= number_format($totalRequestedAmount, 2) ?></div>
         <div class="module-kpi-detail"><?= $approvedRequests ?> approved requests</div>
         <div class="module-kpi-icon"><i class="fas fa-coins"></i></div>
       </div>
@@ -172,7 +389,7 @@ if ($poId > 0) {
         <i class="bi bi-check2-square"></i> Approvals
       </a>
       <a href="?tab=reports" class="tab-btn <?= $activeTab === 'reports' ? 'active' : '' ?>">
-        <i class="bi bi-graph-up"></i> Reports
+        <i class="fas fa-chart-line"></i> Reports
       </a>
     </div>
 
@@ -430,7 +647,7 @@ if ($poId > 0) {
               <tr>
                 <td><?= htmlspecialchars($p['po_number'] ?? '') ?></td>
                 <td><?= htmlspecialchars($p['supplier_name'] ?? $p['supplier'] ?? '') ?></td>
-                <td>â‚½<?= number_format($p['total_amount'] ?? 0, 2) ?></td>
+                <td>&#8369;<?= number_format($p['total_amount'] ?? 0, 2) ?></td>
                 <td><span class="badge <?= badge_class($p['status'] ?? 'Draft') ?>">
                   <?= htmlspecialchars($p['status'] ?? 'Draft') ?>
                     </span>
@@ -472,6 +689,7 @@ if ($poId > 0) {
             <thead class="table-light">
               <tr>
                 <th>Request Ref</th>
+                <th>Source</th>
                 <th>Item</th>
                 <th>Qty</th>
                 <th>Supplier</th>
@@ -486,11 +704,31 @@ if ($poId > 0) {
               <?php foreach ($requests as $r): ?>
               <tr>
                 <td><?= htmlspecialchars($r['request_ref'] ?? '-') ?></td>
+                <td>
+                  <?php
+                    $srcModule = trim((string)($r['source_module'] ?? ''));
+                    $srcSystem = trim((string)($r['source_system'] ?? ''));
+                    $srcRef = trim((string)($r['source_reference'] ?? ''));
+                    $srcLabel = $srcModule !== '' ? strtoupper($srcModule) : 'MANUAL';
+                    if ($srcSystem !== '') {
+                      $srcLabel .= ' / ' . $srcSystem;
+                    }
+                  ?>
+                  <div><?= htmlspecialchars($srcLabel) ?></div>
+                  <?php if ($srcRef !== ''): ?>
+                    <small class="text-muted"><?= htmlspecialchars($srcRef) ?></small>
+                  <?php endif; ?>
+                </td>
                 <td><?= htmlspecialchars($r['item_name'] ?? '') ?></td>
                 <td><?= (int)($r['quantity'] ?? 0) ?></td>
                 <td><?= htmlspecialchars($r['supplier'] ?? '') ?></td>
                 <td><?= htmlspecialchars((string)($r['budget_year'] ?? '-')) ?></td>
-                <td>â‚±<?= number_format((float)($r['estimated_amount'] ?? 0), 2) ?></td>
+                <?php
+                  $rowEstimateAmount = (float)($r['estimated_amount'] ?? 0);
+                  $rowLinkedPoTotal = (float)($r['linked_po_total'] ?? 0);
+                  $rowDisplayAmount = (!empty($r['po_number']) && $rowLinkedPoTotal > 0) ? $rowLinkedPoTotal : $rowEstimateAmount;
+                ?>
+                <td>&#8369;<?= number_format($rowDisplayAmount, 2) ?></td>
                 <td>
                   <span class="badge <?= badge_class($r['status'] ?? 'Pending') ?>">
                     <?= htmlspecialchars($r['status'] ?? 'Pending') ?>
@@ -731,6 +969,7 @@ if ($poId > 0) {
         foreach ($budgets as $b) {
           if ($b['year'] == $currentYear) {
             $yearBudget = $b;
+            $yearBudget['spent'] = $resolveBudgetSpent($b);
             break;
           }
         }
@@ -759,16 +998,53 @@ if ($poId > 0) {
       </div>
       <?php endif; ?>
 
+      <?php if ($canAdd): ?>
+      <div id="requestBudgetForm" style="display:none;">
+        <form method="POST" action="../../controllers/BudgetController.php" class="row g-3">
+          <div class="col-md-4"><label class="form-label">Budget Year</label><input type="number" name="year" class="form-control" min="2000" value="<?= date('Y') ?>" required></div>
+          <div class="col-md-4"><label class="form-label">Requested Amount</label><input type="number" step="0.01" min="0.01" name="requested_amount" class="form-control" required></div>
+          <div class="col-md-4"><label class="form-label">Purpose</label><input type="text" name="purpose" class="form-control" placeholder="Reason for budget request" required></div>
+          <div class="col-12 d-flex gap-2">
+            <button class="btn btn-primary flex-grow-1" name="submit_budget_request"><i class="bi bi-send"></i> Submit Request</button>
+            <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          </div>
+        </form>
+      </div>
+      <?php endif; ?>
+
+      <div class="table-card mb-4">
+        <h5 class="mb-3"><i class="bi bi-cash-coin"></i> Budget Requests</h5>
+        <div class="table-responsive">
+          <table class="table table-striped table-hover align-middle">
+            <thead class="table-light"><tr><th>Date</th><th>Year</th><th>Amount</th><th>Purpose</th><th>Status</th><th>Requested By</th><?php if ($canApproveReq): ?><th class="text-end">Action</th><?php endif; ?></tr></thead>
+            <tbody>
+              <?php if (empty($budgetRequests)): ?><tr><td colspan="<?= $canApproveReq ? '7' : '6' ?>" class="text-center text-muted">No budget requests.</td></tr><?php endif; ?>
+              <?php foreach ($budgetRequests as $br): ?>
+                <tr>
+                  <td class="text-muted small"><?= htmlspecialchars((string)($br['created_at'] ?? '')) ?></td>
+                  <td><?= (int)($br['req_year'] ?? 0) ?></td>
+                  <td>&#8369;<?= number_format((float)($br['req_amount'] ?? 0), 2) ?></td>
+                  <td><?= htmlspecialchars((string)($br['req_purpose'] ?? '')) ?></td>
+                  <td><span class="badge <?= badge_class((string)($br['status'] ?? 'Pending')) ?>"><?= htmlspecialchars((string)($br['status'] ?? 'Pending')) ?></span></td>
+                  <td><?= htmlspecialchars((string)($br['requested_by_name'] ?? '-')) ?></td>
+                  <?php if ($canApproveReq): ?><td class="text-end"><?php if (($br['status'] ?? '') === 'Pending'): ?><form method="POST" action="../../controllers/BudgetController.php" class="d-inline"><input type="hidden" name="id" value="<?= (int)$br['id'] ?>"><button class="btn btn-sm btn-outline-success" name="approve_budget_request"><i class="bi bi-check2"></i></button></form><form method="POST" action="../../controllers/BudgetController.php" class="d-inline"><input type="hidden" name="id" value="<?= (int)$br['id'] ?>"><button class="btn btn-sm btn-outline-danger" name="reject_budget_request"><i class="bi bi-x-lg"></i></button></form><?php else: ?><span class="text-muted small"><?= htmlspecialchars((string)($br['acted_by_name'] ?? '-')) ?></span><?php endif; ?></td><?php endif; ?>
+                </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- BUDGET STATS -->
       <div class="row g-3 mb-4">
         <div class="col-md-3">
           <div class="stat-card">
             <div class="stat-icon" style="background: #e3f2fd;">
-              <i class="bi bi-file-earmark-text" style="color: #1976d2;"></i>
+              <i class="fas fa-wallet" style="color: #1976d2;"></i>
             </div>
             <div class="stat-content">
               <div class="stat-label">Total Budget</div>
-              <div class="stat-value">â‚½<?= number_format($yearBudget ? ($yearBudget['allocated'] ?? 0) : 0, 2) ?></div>
+              <div class="stat-value">&#8369;<?= number_format($yearBudget ? ($yearBudget['allocated'] ?? 0) : 0, 2) ?></div>
             </div>
           </div>
         </div>
@@ -776,11 +1052,11 @@ if ($poId > 0) {
         <div class="col-md-3">
           <div class="stat-card">
             <div class="stat-icon" style="background: #ffebee;">
-              <i class="bi bi-graph-down" style="color: #d32f2f;"></i>
+              <i class="fas fa-arrow-down" style="color: #d32f2f;"></i>
             </div>
             <div class="stat-content">
               <div class="stat-label">Total Spent</div>
-              <div class="stat-value">â‚½<?= number_format($yearBudget ? ($yearBudget['spent'] ?? 0) : 0, 2) ?></div>
+              <div class="stat-value">&#8369;<?= number_format($yearBudget ? ($yearBudget['spent'] ?? 0) : 0, 2) ?></div>
             </div>
           </div>
         </div>
@@ -788,11 +1064,11 @@ if ($poId > 0) {
         <div class="col-md-3">
           <div class="stat-card">
             <div class="stat-icon" style="background: #f1f8e9;">
-              <i class="bi bi-graph-up" style="color: #689f38;"></i>
+              <i class="fas fa-chart-line" style="color: #689f38;"></i>
             </div>
             <div class="stat-content">
               <div class="stat-label">Remaining</div>
-              <div class="stat-value">â‚½<?= number_format($yearBudget ? (($yearBudget['allocated'] ?? 0) - ($yearBudget['spent'] ?? 0)) : 0, 2) ?></div>
+              <div class="stat-value">&#8369;<?= number_format($yearBudget ? (($yearBudget['allocated'] ?? 0) - ($yearBudget['spent'] ?? 0)) : 0, 2) ?></div>
             </div>
           </div>
         </div>
@@ -800,7 +1076,7 @@ if ($poId > 0) {
         <div class="col-md-3">
           <div class="stat-card">
             <div class="stat-icon" style="background: #fff3e0;">
-              <i class="bi bi-hourglass-split" style="color: #f57c00;"></i>
+              <i class="fas fa-percentage" style="color: #f57c00;"></i>
             </div>
             <div class="stat-content">
               <div class="stat-label">Utilization</div>
@@ -835,14 +1111,15 @@ if ($poId > 0) {
                 <?php
                   $year = (int)$b['year'];
                   $requested = (float)($summaryMap[$year]['total_requested'] ?? 0);
-                  $balanceAfter = (float)$b['allocated'] - ((float)$b['spent'] + $requested);
+                  $spent = $resolveBudgetSpent($b);
+                  $balanceAfter = (float)$b['allocated'] - ($spent + $requested);
                 ?>
                 <tr>
                   <td><?= $year ?></td>
-                  <td>â‚±<?= number_format((float)$b['allocated'], 2) ?></td>
-                  <td>â‚±<?= number_format((float)$b['spent'], 2) ?></td>
-                  <td>â‚±<?= number_format($requested, 2) ?></td>
-                  <td class="<?= $balanceAfter < 0 ? 'text-danger fw-bold' : '' ?>">â‚±<?= number_format($balanceAfter, 2) ?></td>
+                  <td>&#8369;<?= number_format((float)$b['allocated'], 2) ?></td>
+                  <td>&#8369;<?= number_format($spent, 2) ?></td>
+                  <td>&#8369;<?= number_format($requested, 2) ?></td>
+                  <td class="<?= $balanceAfter < 0 ? 'text-danger fw-bold' : '' ?>">&#8369;<?= number_format($balanceAfter, 2) ?></td>
                 </tr>
               <?php endforeach; ?>
               <?php if (empty($budgets)): ?>
@@ -900,9 +1177,343 @@ if ($poId > 0) {
 
     <!-- REPORTS TAB -->
     <?php if ($activeTab === 'reports'): ?>
-      <div class="table-card">
+      <?php
+        $defaultReportFrom = date('Y-m-01');
+        $defaultReportTo = date('Y-m-d');
+
+        $reportFromInput = (string)($_GET['report_from'] ?? $defaultReportFrom);
+        $reportToInput = (string)($_GET['report_to'] ?? $defaultReportTo);
+
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $reportFromInput)) {
+          $reportFromInput = $defaultReportFrom;
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $reportToInput)) {
+          $reportToInput = $defaultReportTo;
+        }
+
+        $fromTs = strtotime($reportFromInput . ' 00:00:00') ?: strtotime($defaultReportFrom . ' 00:00:00');
+        $toTs = strtotime($reportToInput . ' 23:59:59') ?: strtotime($defaultReportTo . ' 23:59:59');
+
+        if ($fromTs > $toTs) {
+          $tmp = $fromTs;
+          $fromTs = $toTs;
+          $toTs = $tmp;
+          $reportFromInput = date('Y-m-d', $fromTs);
+          $reportToInput = date('Y-m-d', $toTs);
+        }
+
+        $inRange = static function ($dateValue) use ($fromTs, $toTs): bool {
+          $ts = strtotime((string)$dateValue);
+          if ($ts === false) {
+            return false;
+          }
+          return $ts >= $fromTs && $ts <= $toTs;
+        };
+
+        $requestCount = 0;
+        $requestApproved = 0;
+        $requestPending = 0;
+        $requestRejected = 0;
+        $requestDelivered = 0;
+        $requestValue = 0.0;
+        $requestValuePending = 0.0;
+        $requestValueApproved = 0.0;
+        $requestValueDelivered = 0.0;
+        $requestValueRejected = 0.0;
+
+        $poCount = 0;
+        $poValue = 0.0;
+        $poOpen = 0;
+        $poReceived = 0;
+
+        $monthlyPo = [];
+        $supplierMetrics = [];
+
+        foreach ($requests as $r) {
+          if (!$inRange($r['created_at'] ?? null)) {
+            continue;
+          }
+
+          $requestCount++;
+          $status = (string)($r['status'] ?? 'Pending');
+          $statusKey = strtolower($status);
+
+          if ($statusKey === 'approved') {
+            $requestApproved++;
+          } elseif ($statusKey === 'pending') {
+            $requestPending++;
+          } elseif ($statusKey === 'rejected') {
+            $requestRejected++;
+          } elseif ($statusKey === 'delivered') {
+            $requestDelivered++;
+          }
+
+          $estimateAmount = (float)($r['estimated_amount'] ?? 0);
+          $linkedPoTotal = (float)($r['linked_po_total'] ?? 0);
+          $rowValue = (!empty($r['po_number']) && $linkedPoTotal > 0) ? $linkedPoTotal : $estimateAmount;
+          $requestValue += $rowValue;
+          if ($statusKey === 'approved') {
+            $requestValueApproved += $rowValue;
+          } elseif ($statusKey === 'pending') {
+            $requestValuePending += $rowValue;
+          } elseif ($statusKey === 'delivered') {
+            $requestValueDelivered += $rowValue;
+          } elseif ($statusKey === 'rejected') {
+            $requestValueRejected += $rowValue;
+          }
+
+          $supplierName = trim((string)($r['supplier'] ?? ''));
+          if ($supplierName === '') {
+            $supplierName = 'Unassigned Supplier';
+          }
+          if (!isset($supplierMetrics[$supplierName])) {
+            $supplierMetrics[$supplierName] = [
+              'supplier' => $supplierName,
+              'requests' => 0,
+              'approved_requests' => 0,
+              'po_count' => 0,
+              'po_value' => 0.0,
+              'requested_value' => 0.0,
+            ];
+          }
+          $supplierMetrics[$supplierName]['requests']++;
+          $supplierMetrics[$supplierName]['requested_value'] += $rowValue;
+          if ($statusKey === 'approved') {
+            $supplierMetrics[$supplierName]['approved_requests']++;
+          }
+        }
+
+        foreach ($pos as $p) {
+          if (!$inRange($p['created_at'] ?? null)) {
+            continue;
+          }
+
+          $poCount++;
+          $poAmount = (float)($p['total_amount'] ?? 0);
+          $poValue += $poAmount;
+
+          $poStatus = strtolower((string)($p['status'] ?? 'Draft'));
+          if ($poStatus === 'received') {
+            $poReceived++;
+          } else {
+            $poOpen++;
+          }
+
+          $monthKey = date('Y-m', strtotime((string)$p['created_at']));
+          if (!isset($monthlyPo[$monthKey])) {
+            $monthlyPo[$monthKey] = 0.0;
+          }
+          $monthlyPo[$monthKey] += $poAmount;
+
+          $supplierName = trim((string)($p['supplier_name'] ?? $p['supplier'] ?? ''));
+          if ($supplierName === '') {
+            $supplierName = 'Unassigned Supplier';
+          }
+          if (!isset($supplierMetrics[$supplierName])) {
+            $supplierMetrics[$supplierName] = [
+              'supplier' => $supplierName,
+              'requests' => 0,
+              'approved_requests' => 0,
+              'po_count' => 0,
+              'po_value' => 0.0,
+              'requested_value' => 0.0,
+            ];
+          }
+          $supplierMetrics[$supplierName]['po_count']++;
+          $supplierMetrics[$supplierName]['po_value'] += $poAmount;
+        }
+
+        $rangeDays = max(1, (int)floor(($toTs - $fromTs) / 86400) + 1);
+        $approvalRate = $requestCount > 0 ? (($requestApproved / $requestCount) * 100) : 0;
+        $avgPoValue = $poCount > 0 ? ($poValue / $poCount) : 0;
+        $avgDailySpend = $poValue / $rangeDays;
+
+        $monthRows = [];
+        $cursor = strtotime(date('Y-m-01', $fromTs));
+        $endCursor = strtotime(date('Y-m-01', $toTs));
+        while ($cursor <= $endCursor) {
+          $mk = date('Y-m', $cursor);
+          $monthRows[] = [
+            'label' => date('M Y', $cursor),
+            'value' => (float)($monthlyPo[$mk] ?? 0),
+          ];
+          $cursor = strtotime('+1 month', $cursor);
+        }
+
+        $supplierRows = array_values($supplierMetrics);
+        usort($supplierRows, static function (array $a, array $b): int {
+          $cmp = ($b['po_value'] <=> $a['po_value']);
+          if ($cmp !== 0) {
+            return $cmp;
+          }
+          return ($b['requests'] <=> $a['requests']);
+        });
+
+        $topSupplierName = '-';
+        $topSupplierValue = 0.0;
+        if (!empty($supplierRows)) {
+          $topSupplierName = (string)$supplierRows[0]['supplier'];
+          $topSupplierValue = (float)$supplierRows[0]['po_value'];
+        }
+      ?>
+
+      <div class="table-card mb-4">
         <h5 class="mb-3">Procurement Reports</h5>
-        <p class="text-muted">Reports and analytics coming soon</p>
+        <form method="GET" class="row g-3 align-items-end">
+          <input type="hidden" name="tab" value="reports">
+          <div class="col-md-3">
+            <label class="form-label">From</label>
+            <input type="date" name="report_from" class="form-control" value="<?= htmlspecialchars($reportFromInput) ?>">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">To</label>
+            <input type="date" name="report_to" class="form-control" value="<?= htmlspecialchars($reportToInput) ?>">
+          </div>
+          <div class="col-md-6 d-flex gap-2 flex-wrap">
+            <button class="btn btn-primary" type="submit"><i class="bi bi-funnel"></i> Apply Filter</button>
+            <a class="btn btn-secondary" href="?tab=reports">Reset</a>
+            <a class="btn btn-outline-secondary" href="?tab=reports&report_from=<?= urlencode($reportFromInput) ?>&report_to=<?= urlencode($reportToInput) ?>&export=csv">
+              <i class="bi bi-download"></i> Export CSV
+            </a>
+          </div>
+        </form>
+        <p class="text-muted mt-3 mb-0">Range: <?= date('M d, Y', $fromTs) ?> to <?= date('M d, Y', $toTs) ?> (<?= $rangeDays ?> day<?= $rangeDays === 1 ? '' : 's' ?>)</p>
+      </div>
+
+      <div class="module-kpi-grid mb-4">
+        <div class="module-kpi-card">
+          <div class="module-kpi-label">Requests Logged</div>
+          <div class="module-kpi-value"><?= (int)$requestCount ?></div>
+          <div class="module-kpi-detail">Approved: <?= (int)$requestApproved ?> | Pending: <?= (int)$requestPending ?></div>
+        </div>
+        <div class="module-kpi-card">
+          <div class="module-kpi-label">Approval Rate</div>
+          <div class="module-kpi-value"><?= number_format($approvalRate, 1) ?>%</div>
+          <div class="module-kpi-detail">Based on request statuses</div>
+        </div>
+        <div class="module-kpi-card">
+          <div class="module-kpi-label">PO Value</div>
+          <div class="module-kpi-value">&#8369;<?= number_format($poValue, 2) ?></div>
+          <div class="module-kpi-detail">POs: <?= (int)$poCount ?> | Received: <?= (int)$poReceived ?></div>
+        </div>
+        <div class="module-kpi-card">
+          <div class="module-kpi-label">Top Supplier</div>
+          <div class="module-kpi-value"><?= htmlspecialchars($topSupplierName) ?></div>
+          <div class="module-kpi-detail">PO Value: &#8369;<?= number_format($topSupplierValue, 2) ?></div>
+        </div>
+      </div>
+
+      <div class="content-grid-2 mb-4">
+        <div class="table-card">
+          <h5 class="mb-3">Request Pipeline</h5>
+          <div class="table-responsive">
+            <table class="table table-striped table-hover align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>Status</th>
+                  <th class="text-end">Count</th>
+                  <th class="text-end">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php
+                  $requestStatusRows = [
+                    ['label' => 'Pending', 'count' => $requestPending, 'value' => $requestValuePending],
+                    ['label' => 'Approved', 'count' => $requestApproved, 'value' => $requestValueApproved],
+                    ['label' => 'Delivered', 'count' => $requestDelivered, 'value' => $requestValueDelivered],
+                    ['label' => 'Rejected', 'count' => $requestRejected, 'value' => $requestValueRejected],
+                  ];
+                ?>
+                <?php foreach ($requestStatusRows as $sr): ?>
+                  <tr>
+                    <td><?= htmlspecialchars($sr['label']) ?></td>
+                    <td class="text-end"><?= (int)$sr['count'] ?></td>
+                    <td class="text-end">&#8369;<?= number_format((float)($sr['value'] ?? 0), 2) ?></td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <h5 class="mb-3">Spend Snapshot</h5>
+          <div class="table-responsive">
+            <table class="table table-striped table-hover align-middle">
+              <thead class="table-light">
+                <tr>
+                  <th>Metric</th>
+                  <th class="text-end">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>Total Requested Value</td><td class="text-end">&#8369;<?= number_format($requestValue, 2) ?></td></tr>
+                <tr><td>Total PO Value</td><td class="text-end">&#8369;<?= number_format($poValue, 2) ?></td></tr>
+                <tr><td>Average PO Value</td><td class="text-end">&#8369;<?= number_format($avgPoValue, 2) ?></td></tr>
+                <tr><td>Average Daily PO Spend</td><td class="text-end">&#8369;<?= number_format($avgDailySpend, 2) ?></td></tr>
+                <tr><td>Open POs</td><td class="text-end"><?= (int)$poOpen ?></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-card mb-4">
+        <h5 class="mb-3">Monthly PO Spend Trend</h5>
+        <div class="table-responsive">
+          <table class="table table-striped table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Month</th>
+                <th class="text-end">PO Spend</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php if (empty($monthRows)): ?>
+                <tr><td colspan="2" class="text-center text-muted">No data in selected range.</td></tr>
+              <?php endif; ?>
+              <?php foreach ($monthRows as $mr): ?>
+                <tr>
+                  <td><?= htmlspecialchars($mr['label']) ?></td>
+                  <td class="text-end">&#8369;<?= number_format((float)$mr['value'], 2) ?></td>
+                </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <h5 class="mb-3">Supplier Performance (Selected Range)</h5>
+        <div class="table-responsive">
+          <table class="table table-striped table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Supplier</th>
+                <th class="text-end">Requests</th>
+                <th class="text-end">Approved</th>
+                <th class="text-end">PO Count</th>
+                <th class="text-end">Requested Value</th>
+                <th class="text-end">PO Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php if (empty($supplierRows)): ?>
+                <tr><td colspan="6" class="text-center text-muted">No supplier data in selected range.</td></tr>
+              <?php endif; ?>
+              <?php foreach ($supplierRows as $sr): ?>
+                <tr>
+                  <td><?= htmlspecialchars((string)$sr['supplier']) ?></td>
+                  <td class="text-end"><?= (int)$sr['requests'] ?></td>
+                  <td class="text-end"><?= (int)$sr['approved_requests'] ?></td>
+                  <td class="text-end"><?= (int)$sr['po_count'] ?></td>
+                  <td class="text-end">&#8369;<?= number_format((float)$sr['requested_value'], 2) ?></td>
+                  <td class="text-end">&#8369;<?= number_format((float)$sr['po_value'], 2) ?></td>
+                </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
       </div>
     <?php endif; ?>
 
@@ -971,6 +1582,23 @@ if ($poId > 0) {
 <?php endif; ?>
 
 <?php include "../layout/footer.php"; ?>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
