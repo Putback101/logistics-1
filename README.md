@@ -262,6 +262,15 @@ Sample JSON payload:
 }
 ```
 
+### Warehouse to Asset Conversion Rule (Updated)
+
+- Conversion is stock-based (true logistics behavior):
+  - A warehouse item can be converted to assets repeatedly while stock is greater than zero.
+  - Each conversion deducts stock.
+- Conversion links asset provenance using `assets.source_inventory_id`.
+- Database setup is now centralized in:
+  - `schema/logistics-1.sql`
+
 ### User Interface
 
 ```
