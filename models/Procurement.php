@@ -81,7 +81,8 @@ class Procurement {
         ?string $sourceModule = null,
         ?string $sourceSystem = null,
         ?string $sourceReference = null,
-        ?string $sourcePayload = null
+        ?string $sourcePayload = null,
+        ?int $projectId = null
     ): bool {
         $columns = ['item_name', 'quantity', 'supplier', 'status'];
         $values = [$item, $qty, $supplier, 'Pending'];
@@ -115,6 +116,10 @@ class Procurement {
             $values[] = $sourceReference;
             $columns[] = 'source_payload';
             $values[] = $sourcePayload;
+        }
+        if ($this->hasColumn('project_id')) {
+            $columns[] = 'project_id';
+            $values[] = $projectId;
         }
 
         $placeholders = implode(',', array_fill(0, count($columns), '?'));

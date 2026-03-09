@@ -242,6 +242,10 @@ CREATE TABLE `inventory` (
   CONSTRAINT `fk_inventory_item` FOREIGN KEY (`item_id`) REFERENCES `items` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+ALTER TABLE `assets`
+  ADD CONSTRAINT `fk_assets_source_inventory`
+  FOREIGN KEY (`source_inventory_id`) REFERENCES `inventory` (`id`) ON DELETE SET NULL;
+
 CREATE TABLE `maintenance_logs` (
 
 
@@ -285,6 +289,7 @@ CREATE TABLE `procurement` (
   `estimated_amount` decimal(12,2) NOT NULL DEFAULT 0.00,
   `po_number` varchar(50) DEFAULT NULL,
   `requested_by` int(11) DEFAULT NULL,
+  `project_id` int(11) DEFAULT NULL,
   `source_module` varchar(80) DEFAULT NULL,
   `source_system` varchar(80) DEFAULT NULL,
   `source_reference` varchar(120) DEFAULT NULL,
@@ -294,6 +299,7 @@ CREATE TABLE `procurement` (
   `item_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `fk_proc_requested_by` (`requested_by`),
+  KEY `fk_proc_project` (`project_id`),
   KEY `idx_proc_source_module` (`source_module`),
   KEY `idx_proc_source_reference` (`source_reference`),
   KEY `fk_proc_supplier` (`supplier_id`),
@@ -301,6 +307,7 @@ CREATE TABLE `procurement` (
   KEY `fk_proc_item` (`item_id`),
   CONSTRAINT `fk_proc_budget` FOREIGN KEY (`budget_id`) REFERENCES `budgets` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_proc_item` FOREIGN KEY (`item_id`) REFERENCES `items` (`id`),
+  CONSTRAINT `fk_proc_project` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_proc_requested_by` FOREIGN KEY (`requested_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_proc_supplier` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

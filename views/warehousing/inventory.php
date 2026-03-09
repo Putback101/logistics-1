@@ -295,7 +295,11 @@ if ($hasItemId) {
                     <a href="../../controllers/InventoryController.php?delete=<?= (int)$i['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this item?')"><i class="bi bi-trash"></i></a>
                   <?php endif; ?>
                   <?php if ($canCreateAssetFromWarehouse): ?>
-                    <a href="../asset/asset.php?tab=registry&source_inventory_id=<?= (int)$i['id'] ?>" class="btn btn-sm btn-outline-primary" title="Create asset from this stock"><i class="bi bi-box-arrow-up-right"></i></a>
+                    <?php if ((int)$i['stock'] <= 0): ?>
+                      <span class="badge text-bg-secondary" title="No stock available">Out of Stock</span>
+                    <?php else: ?>
+                      <a href="../asset/asset.php?tab=registry&source_inventory_id=<?= (int)$i['id'] ?>" class="btn btn-sm btn-outline-primary" title="Create asset from this stock"><i class="bi bi-box-arrow-up-right"></i></a>
+                    <?php endif; ?>
                   <?php endif; ?>
                   <?php if (!$canEdit && !$canDelete && !$canCreateAssetFromWarehouse): ?>
                     <span class="text-muted">-</span>

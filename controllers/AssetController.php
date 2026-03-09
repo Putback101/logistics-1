@@ -61,6 +61,11 @@ if (isset($_POST['add_asset'])) {
     : 0;
   $consumeFromInventory = isset($_POST['consume_from_inventory']) && $_POST['consume_from_inventory'] === '1';
   $consumeQty = max(1, (int)($_POST['consume_qty'] ?? 1));
+  $createCount = max(1, (int)($_POST['create_count'] ?? $consumeQty));
+  if ($sourceInventoryId > 0) {
+    $consumeFromInventory = true;
+    $createCount = $consumeQty;
+  }
 
   try {
     $pdo->beginTransaction();
@@ -97,9 +102,21 @@ if (isset($_POST['add_asset'])) {
 
     $name = trim((string)($_POST['asset_name'] ?? $name));
     $cat = trim((string)($_POST['asset_category'] ?? $cat));
-    $newId = $asset->create($_POST);
+    $createdIds = [];
+    $basePost = $_POST;
+    for ($i = 0; $i < $createCount; $i++) {
+      $rowPost = $basePost;
+      if ($i > 0 || $createCount > 1) {
+        // Batch conversion must keep tags unique; generate sequential tags.
+        $rowPost['asset_tag'] = generate_next_asset_tag($pdo);
+      }
+      $createdIds[] = (int)$asset->create($rowPost);
+    }
+    $newId = (int)($createdIds[0] ?? 0);
 
-    $action = "Added asset: $tag - $name";
+    $action = $createCount > 1
+      ? "Added $createCount assets: $name"
+      : "Added asset: $tag - $name";
     if ($sourceInventoryId > 0) {
       $action .= " (linked to warehouse item ID $sourceInventoryId";
       if ($consumeFromInventory) {
@@ -112,7 +129,11 @@ if (isset($_POST['add_asset'])) {
         ->execute([$_SESSION['user']['id'], $action, 'assets', $newId]);
 
     $pdo->commit();
-    set_flash('success', 'Asset added successfully.' . ($sourceInventoryId > 0 ? ' Warehouse link saved.' : ''));
+    if ($createCount > 1) {
+      set_flash('success', "Assets added successfully ($createCount records)." . ($sourceInventoryId > 0 ? " Warehouse stock deducted by $consumeQty." : ''));
+    } else {
+      set_flash('success', 'Asset added successfully.' . ($sourceInventoryId > 0 ? ' Warehouse link saved.' : ''));
+    }
   } catch (Throwable $e) {
     if ($pdo->inTransaction()) {
       $pdo->rollBack();

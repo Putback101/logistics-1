@@ -18,11 +18,24 @@ $canAddVehicle = $canManage;
 $asset = new Asset($pdo);
 $rows = $asset->getAll();
 $users = $pdo->query("SELECT id, fullname, role FROM users ORDER BY fullname ASC")->fetchAll();
-$warehouseItems = $pdo->query("SELECT i.id, i.item_name, i.stock, i.location, it.category AS item_category, it.unit AS item_unit FROM inventory i LEFT JOIN items it ON it.id = i.item_id ORDER BY i.item_name ASC")->fetchAll(PDO::FETCH_ASSOC);
+$warehouseItems = $pdo->query("
+  SELECT i.id, i.item_name, i.stock, i.location, it.category AS item_category, it.unit AS item_unit
+  FROM inventory i
+  LEFT JOIN items it ON it.id = i.item_id
+  WHERE i.stock > 0
+  ORDER BY i.item_name ASC
+")->fetchAll(PDO::FETCH_ASSOC);
 $prefillSourceInventoryId = isset($_GET['source_inventory_id']) && ctype_digit((string)$_GET['source_inventory_id']) ? (int)$_GET['source_inventory_id'] : 0;
 $prefillWarehouseItem = null;
 if ($prefillSourceInventoryId > 0) {
-  $ws = $pdo->prepare("SELECT i.id, i.item_name, i.stock, i.location, it.category AS item_category, it.unit AS item_unit FROM inventory i LEFT JOIN items it ON it.id = i.item_id WHERE i.id = ? LIMIT 1");
+  $ws = $pdo->prepare("
+    SELECT i.id, i.item_name, i.stock, i.location, it.category AS item_category, it.unit AS item_unit
+    FROM inventory i
+    LEFT JOIN items it ON it.id = i.item_id
+    WHERE i.id = ?
+      AND i.stock > 0
+    LIMIT 1
+  ");
   $ws->execute([$prefillSourceInventoryId]);
   $prefillWarehouseItem = $ws->fetch(PDO::FETCH_ASSOC) ?: null;
 }
@@ -76,7 +89,15 @@ if (!in_array($activeTab, ['registry', 'tracking', 'monitoring'], true)) {
   $activeTab = 'registry';
 }
 
-$selectedId = (int)($_GET['asset_id'] ?? 0);
+if (!isset($_SESSION['asset_selected_id'])) {
+  $_SESSION['asset_selected_id'] = 0;
+}
+$selectedId = isset($_GET['asset_id']) && ctype_digit((string)$_GET['asset_id']) ? (int)$_GET['asset_id'] : 0;
+if ($selectedId > 0) {
+  $_SESSION['asset_selected_id'] = $selectedId;
+} elseif (in_array($activeTab, ['tracking', 'monitoring'], true) && ctype_digit((string)($_SESSION['asset_selected_id'] ?? '0'))) {
+  $selectedId = (int)$_SESSION['asset_selected_id'];
+}
 $selected = $selectedId > 0 ? $asset->getById($selectedId) : null;
 $movements = ($activeTab === 'tracking' && $selectedId > 0) ? $asset->movementLog($selectedId) : [];
 $logs = ($activeTab === 'monitoring' && $selectedId > 0) ? $asset->monitorLog($selectedId) : [];
@@ -280,6 +301,48 @@ $assetQuery = $selectedId > 0 ? ('&asset_id=' . (int)$selectedId) : '';
       </div>
 
       <div class="table-card mt-4">
+        <h5 class="mb-3">Warehouse Items (For Asset Conversion)</h5>
+        <div class="table-responsive">
+          <table class="table table-striped table-hover align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>Item</th>
+                <th>Category</th>
+                <th>Unit</th>
+                <th>Stock</th>
+                <th>Location</th>
+                <th class="text-end">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php if (empty($warehouseItems)): ?>
+                <tr><td colspan="6" class="text-center text-muted">No warehouse items available.</td></tr>
+              <?php endif; ?>
+              <?php foreach ($warehouseItems as $wi): ?>
+                <?php $stockQty = (int)($wi['stock'] ?? 0); ?>
+                <tr>
+                  <td><?= htmlspecialchars((string)($wi['item_name'] ?? '')) ?></td>
+                  <td><?= htmlspecialchars((string)($wi['item_category'] ?? '-')) ?></td>
+                  <td><?= htmlspecialchars((string)($wi['item_unit'] ?? '-')) ?></td>
+                  <td class="<?= $stockQty <= 0 ? 'text-danger fw-semibold' : '' ?>"><?= $stockQty ?></td>
+                  <td><?= htmlspecialchars((string)($wi['location'] ?? '-')) ?></td>
+                  <td class="text-end">
+                    <?php if ($canAdd): ?>
+                      <a class="btn btn-sm btn-outline-primary <?= $stockQty <= 0 ? 'disabled' : '' ?>" href="asset.php?tab=registry&source_inventory_id=<?= (int)$wi['id'] ?>" <?= $stockQty <= 0 ? 'aria-disabled="true"' : '' ?>>
+                        <i class="bi bi-box-arrow-up-right"></i> Convert to Asset
+                      </a>
+                    <?php else: ?>
+                      <span class="text-muted">-</span>
+                    <?php endif; ?>
+                  </td>
+                </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="table-card mt-4">
         <h5 class="mb-3">Inbound Asset Requests</h5>
         <?php if (!$hasAssetRequestsTable): ?>
           <p class="text-muted mb-0">Inbound queue is not enabled yet. Run migration `2026-03-09-asset-external-intake.sql`.</p>
@@ -346,23 +409,29 @@ $assetQuery = $selectedId > 0 ? ('&asset_id=' . (int)$selectedId) : '';
                 <th>Name</th>
                 <th>Status</th>
                 <th>Location</th>
+                <th>Assigned To</th>
+                <th>Source</th>
                 <th class="text-end">Action</th>
               </tr>
             </thead>
             <tbody>
               <?php if (empty($rows)): ?>
-                <tr><td colspan="5" class="text-center text-muted">No assets available.</td></tr>
+                <tr><td colspan="7" class="text-center text-muted">No assets available.</td></tr>
               <?php endif; ?>
               <?php foreach ($rows as $a): ?>
-                <tr class="<?= ((int)$a['id'] === $selectedId) ? 'table-primary' : '' ?>">
+                <tr class="<?= ((int)$a['id'] === $selectedId) ? 'asset-selected-row' : '' ?>">
                   <td><?= htmlspecialchars((string)$a['asset_tag']) ?></td>
                   <td><?= htmlspecialchars((string)$a['asset_name']) ?></td>
                   <td><?= htmlspecialchars((string)($a['status'] ?? '-')) ?></td>
                   <td><?= htmlspecialchars((string)($a['location'] ?? '-')) ?></td>
+                  <td><?= htmlspecialchars((string)($a['assigned_name'] ?? '-')) ?></td>
+                  <td><?php if (!empty($a['source_inventory_id'])): ?><span class="badge text-bg-light border">Warehouse #<?= (int)$a['source_inventory_id'] ?></span><?php else: ?><span class="text-muted">-</span><?php endif; ?></td>
                   <td class="text-end">
-                    <a class="btn btn-sm btn-outline-primary" href="asset.php?tab=tracking&asset_id=<?= (int)$a['id'] ?>">
-                      <?= ((int)$a['id'] === $selectedId) ? 'Selected' : 'View' ?>
-                    </a>
+                    <?php if ((int)$a['id'] === $selectedId): ?>
+                      <span class="badge text-bg-info">Selected</span>
+                    <?php else: ?>
+                      <a class="btn btn-sm btn-outline-primary" href="asset.php?tab=tracking&asset_id=<?= (int)$a['id'] ?>">View</a>
+                    <?php endif; ?>
                   </td>
                 </tr>
               <?php endforeach; ?>
@@ -378,7 +447,13 @@ $assetQuery = $selectedId > 0 ? ('&asset_id=' . (int)$selectedId) : '';
             <div class="col-md-3"><div class="text-muted small">Tag</div><div class="fw-semibold"><?= htmlspecialchars($selected['asset_tag']) ?></div></div>
             <div class="col-md-3"><div class="text-muted small">Status</div><div class="fw-semibold"><?= htmlspecialchars($selected['status']) ?></div></div>
             <div class="col-md-3"><div class="text-muted small">Location</div><div class="fw-semibold"><?= htmlspecialchars($selected['location'] ?? '-') ?></div></div>
-            <div class="col-md-3"><div class="text-muted small">Assigned To (User ID)</div><div class="fw-semibold"><?= htmlspecialchars($selected['assigned_to'] ?? '-') ?></div></div>
+            <div class="col-md-3"><div class="text-muted small">Assigned To</div><div class="fw-semibold"><?= htmlspecialchars((string)($selected['assigned_name'] ?? '-')) ?></div></div>
+            <div class="col-md-3"><div class="text-muted small">Source</div><div class="fw-semibold"><?php if (!empty($selected['source_inventory_id'])): ?>Warehouse #<?= (int)$selected['source_inventory_id'] ?><?php else: ?>-<?php endif; ?></div></div>
+          </div>
+          <div class="mt-3">
+            <a class="btn btn-sm btn-outline-secondary" href="asset.php?tab=monitoring&asset_id=<?= (int)$selected['id'] ?>">
+              <i class="bi bi-activity"></i> Open Monitoring For This Asset
+            </a>
           </div>
         </div>
 
@@ -468,23 +543,29 @@ $assetQuery = $selectedId > 0 ? ('&asset_id=' . (int)$selectedId) : '';
                 <th>Name</th>
                 <th>Category</th>
                 <th>Status</th>
+                <th>Assigned To</th>
+                <th>Source</th>
                 <th class="text-end">Action</th>
               </tr>
             </thead>
             <tbody>
               <?php if (empty($rows)): ?>
-                <tr><td colspan="5" class="text-center text-muted">No assets available.</td></tr>
+                <tr><td colspan="7" class="text-center text-muted">No assets available.</td></tr>
               <?php endif; ?>
               <?php foreach ($rows as $a): ?>
-                <tr class="<?= ((int)$a['id'] === $selectedId) ? 'table-primary' : '' ?>">
+                <tr class="<?= ((int)$a['id'] === $selectedId) ? 'asset-selected-row' : '' ?>">
                   <td><?= htmlspecialchars((string)$a['asset_tag']) ?></td>
                   <td><?= htmlspecialchars((string)$a['asset_name']) ?></td>
                   <td><?= htmlspecialchars((string)($a['asset_category'] ?? '-')) ?></td>
                   <td><?= htmlspecialchars((string)($a['status'] ?? '-')) ?></td>
+                  <td><?= htmlspecialchars((string)($a['assigned_name'] ?? '-')) ?></td>
+                  <td><?php if (!empty($a['source_inventory_id'])): ?><span class="badge text-bg-light border">Warehouse #<?= (int)$a['source_inventory_id'] ?></span><?php else: ?><span class="text-muted">-</span><?php endif; ?></td>
                   <td class="text-end">
-                    <a class="btn btn-sm btn-outline-primary" href="asset.php?tab=monitoring&asset_id=<?= (int)$a['id'] ?>">
-                      <?= ((int)$a['id'] === $selectedId) ? 'Selected' : 'View' ?>
-                    </a>
+                    <?php if ((int)$a['id'] === $selectedId): ?>
+                      <span class="badge text-bg-info">Selected</span>
+                    <?php else: ?>
+                      <a class="btn btn-sm btn-outline-primary" href="asset.php?tab=monitoring&asset_id=<?= (int)$a['id'] ?>">View</a>
+                    <?php endif; ?>
                   </td>
                 </tr>
               <?php endforeach; ?>
@@ -501,6 +582,13 @@ $assetQuery = $selectedId > 0 ? ('&asset_id=' . (int)$selectedId) : '';
             <div class="col-md-3"><div class="text-muted small">Status</div><div class="fw-semibold"><?= htmlspecialchars($selected['status']) ?></div></div>
             <div class="col-md-3"><div class="text-muted small">Category</div><div class="fw-semibold"><?= htmlspecialchars($selected['asset_category']) ?></div></div>
             <div class="col-md-3"><div class="text-muted small">Location</div><div class="fw-semibold"><?= htmlspecialchars($selected['location'] ?? '-') ?></div></div>
+            <div class="col-md-3"><div class="text-muted small">Assigned To</div><div class="fw-semibold"><?= htmlspecialchars((string)($selected['assigned_name'] ?? '-')) ?></div></div>
+            <div class="col-md-3"><div class="text-muted small">Source</div><div class="fw-semibold"><?php if (!empty($selected['source_inventory_id'])): ?>Warehouse #<?= (int)$selected['source_inventory_id'] ?><?php else: ?>-<?php endif; ?></div></div>
+          </div>
+          <div class="mt-3">
+            <a class="btn btn-sm btn-outline-secondary" href="asset.php?tab=tracking&asset_id=<?= (int)$selected['id'] ?>">
+              <i class="bi bi-geo-alt"></i> Open Tracking For This Asset
+            </a>
           </div>
         </div>
 
@@ -601,10 +689,20 @@ $assetQuery = $selectedId > 0 ? ('&asset_id=' . (int)$selectedId) : '';
       <form method="POST" action="../../controllers/AssetController.php" class="row g-3">
         <input type="hidden" name="source_inventory_id" value="<?= (int)$prefillSourceInventoryId ?>">
         <input type="hidden" name="consume_from_inventory" value="<?= $prefillSourceInventoryId > 0 ? '1' : '0' ?>">
-        <input type="hidden" name="consume_qty" value="1">
+        <input type="hidden" name="create_count" value="1">
+        <?php if (!$prefillWarehouseItem): ?>
+          <input type="hidden" name="consume_qty" value="1">
+        <?php endif; ?>
         <?php if ($prefillWarehouseItem): ?>
           <div class="col-12">
-            <div class="alert alert-info mb-1">Linked Warehouse Source: <strong>#<?= (int)$prefillWarehouseItem['id'] ?> - <?= htmlspecialchars((string)($prefillWarehouseItem['item_name'] ?? '')) ?></strong> (Stock: <?= (int)$prefillWarehouseItem['stock'] ?>). Saving this asset will deduct <strong>1</strong> stock.</div>
+            <div class="alert alert-info mb-1">Linked Warehouse Source: <strong>#<?= (int)$prefillWarehouseItem['id'] ?> - <?= htmlspecialchars((string)($prefillWarehouseItem['item_name'] ?? '')) ?></strong> (Stock: <?= (int)$prefillWarehouseItem['stock'] ?>). Choose quantity to convert. The same quantity will be deducted from warehouse stock and created as asset records.</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Convert Quantity</label>
+            <div class="d-flex gap-2">
+              <input type="number" min="1" max="<?= (int)$prefillWarehouseItem['stock'] ?>" name="consume_qty" id="consumeQtyInput" class="form-control" value="1" required>
+              <button type="button" class="btn btn-outline-secondary" id="convertAllBtn">All (<?= (int)$prefillWarehouseItem['stock'] ?>)</button>
+            </div>
           </div>
         <?php endif; ?>
 
@@ -668,6 +766,24 @@ $assetQuery = $selectedId > 0 ? ('&asset_id=' . (int)$selectedId) : '';
     </div><?php endif; ?>
   </div>
 </div>
+<?php endif; ?>
+
+<?php if ($canAdd && $prefillSourceInventoryId > 0): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var qtyInput = document.getElementById('consumeQtyInput');
+  var allBtn = document.getElementById('convertAllBtn');
+  if (qtyInput && allBtn) {
+    allBtn.addEventListener('click', function () {
+      var maxQty = parseInt(qtyInput.getAttribute('max') || '1', 10);
+      qtyInput.value = Number.isFinite(maxQty) && maxQty > 0 ? String(maxQty) : '1';
+    });
+  }
+  if (typeof openTemplateModal === 'function') {
+    openTemplateModal('addAssetForm', 'Choose Asset Section');
+  }
+});
+</script>
 <?php endif; ?>
 
 <?php require_once __DIR__ . "/../layout/footer.php"; ?>

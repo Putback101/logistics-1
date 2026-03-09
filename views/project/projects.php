@@ -186,9 +186,43 @@ $projectResources = [];
 $users = $pdo->query("SELECT id, fullname FROM users ORDER BY fullname ASC")->fetchAll(PDO::FETCH_ASSOC);
 $fleet = $pdo->query("SELECT id, vehicle_name, plate_number FROM fleet ORDER BY vehicle_name ASC")->fetchAll(PDO::FETCH_ASSOC);
 $assets = $pdo->query("SELECT id, asset_tag, asset_name FROM assets ORDER BY asset_name ASC")->fetchAll(PDO::FETCH_ASSOC);
+$itemsMaster = $pdo->query("SELECT id, item_name, category, unit FROM items ORDER BY item_name ASC")->fetchAll(PDO::FETCH_ASSOC);
+$budgetYears = $pdo->query("SELECT year FROM budgets ORDER BY year DESC")->fetchAll(PDO::FETCH_COLUMN) ?: [];
+$procurementHasProjectId = false;
+try {
+  $procurementHasProjectId = (int)$pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'procurement' AND COLUMN_NAME = 'project_id'")->fetchColumn() > 0;
+} catch (Throwable $e) {
+  $procurementHasProjectId = false;
+}
+$projectProcurementRows = [];
 if ($selectedProjectId > 0) {
   $projectTasks = $taskModel->getByProject($selectedProjectId);
   $projectResources = $resModel->getByProject($selectedProjectId);
+  $projectRef = 'PROJECT-' . $selectedProjectId;
+  if ($procurementHasProjectId) {
+    $stmt = $pdo->prepare("
+      SELECT p.*, po.id AS linked_po_id, po.po_number AS linked_po_number
+      FROM procurement p
+      LEFT JOIN purchase_orders po ON po.po_number = p.po_number
+      WHERE p.project_id = ?
+         OR (p.source_module = 'project_management' AND p.source_reference = ?)
+      ORDER BY p.created_at DESC, p.id DESC
+      LIMIT 100
+    ");
+    $stmt->execute([$selectedProjectId, $projectRef]);
+  } else {
+    $stmt = $pdo->prepare("
+      SELECT p.*, po.id AS linked_po_id, po.po_number AS linked_po_number
+      FROM procurement p
+      LEFT JOIN purchase_orders po ON po.po_number = p.po_number
+      WHERE p.source_module = 'project_management'
+        AND p.source_reference = ?
+      ORDER BY p.created_at DESC, p.id DESC
+      LIMIT 100
+    ");
+    $stmt->execute([$projectRef]);
+  }
+  $projectProcurementRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 ?>
 <?php require_once __DIR__ . "/../layout/header.php"; ?>
@@ -353,6 +387,70 @@ if ($selectedProjectId > 0) {
 
         <div class="col-lg-5">
           <div class="form-card mb-3">
+            <h5 class="mb-3">Resource / Material Request</h5>
+            <form method="POST" action="../../controllers/ProjectRequestController.php" class="row g-3" id="projectRequestForm">
+              <input type="hidden" name="project_id" value="<?= (int)$selectedProject['id'] ?>">
+              <div class="col-md-5">
+                <label class="form-label">Request Type</label>
+                <select name="request_kind" class="form-select" id="project_request_kind">
+                  <option value="material">Material</option>
+                  <option value="workforce">Workforce</option>
+                </select>
+              </div>
+              <div class="col-md-7" data-request-material>
+                <label class="form-label">Item (Master)</label>
+                <select name="item_id" class="form-select">
+                  <option value="">Select item</option>
+                  <?php foreach($itemsMaster as $im): ?>
+                    <option value="<?= (int)$im['id'] ?>">
+                      <?= htmlspecialchars((string)$im['item_name']) ?>
+                      <?php if (!empty($im['unit'])): ?> [<?= htmlspecialchars((string)$im['unit']) ?>]<?php endif; ?>
+                    </option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div class="col-md-7 d-none" data-request-workforce>
+                <label class="form-label">Workforce Role</label>
+                <input type="text" name="workforce_role" class="form-control" placeholder="e.g. Driver, Welder, Electrician">
+              </div>
+              <div class="col-md-5" data-request-material>
+                <label class="form-label">Material Qty</label>
+                <input type="number" min="1" name="material_qty" class="form-control" value="1">
+              </div>
+              <div class="col-md-5 d-none" data-request-workforce>
+                <label class="form-label">Headcount</label>
+                <input type="number" min="1" name="workforce_count" class="form-control" value="1">
+              </div>
+              <div class="col-md-7" data-request-material>
+                <label class="form-label">Supplier (optional)</label>
+                <input type="text" name="supplier" class="form-control" placeholder="Supplier / Agency">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Budget Year</label>
+                <select name="budget_year" class="form-select" required>
+                  <option value="">Select year</option>
+                  <?php foreach($budgetYears as $by): ?>
+                    <option value="<?= (int)$by ?>"><?= (int)$by ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Estimated Amount</label>
+                <input type="number" min="0" step="0.01" name="estimated_amount" class="form-control" value="0" required>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Notes</label>
+                <textarea name="notes" class="form-control" rows="2" placeholder="Justification, urgency, and scope..."></textarea>
+              </div>
+              <div class="col-12 d-grid">
+                <button class="btn btn-primary" name="create_project_request" <?= $canEdit ? '' : 'disabled' ?>>
+                  <i class="bi bi-send"></i> Submit to Procurement
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div class="form-card mb-3">
             <h5 class="mb-3">Capacity Planning</h5>
             <form method="POST" action="../../controllers/ProjectResourceController.php" class="row g-3">
               <input type="hidden" name="project_id" value="<?= (int)$selectedProject['id'] ?>">
@@ -364,6 +462,43 @@ if ($selectedProjectId > 0) {
               <div class="col-12"><label class="form-label">Notes</label><textarea name="notes" class="form-control" rows="2"></textarea></div>
               <div class="col-12 d-grid"><button class="btn btn-primary" name="add_resource" <?= $canEdit ? '' : 'disabled' ?>><i class="bi bi-person-plus"></i> Allocate</button></div>
             </form>
+          </div>
+
+          <div class="table-card mb-3">
+            <h5 class="mb-3">Submitted Requests (Procurement)</h5>
+            <div class="table-responsive">
+              <table class="table table-striped table-hover align-middle">
+                <thead class="table-light"><tr><th>Ref</th><th>Item / Request</th><th>Qty</th><th>Status</th><th>PO</th></tr></thead>
+                <tbody>
+                  <?php foreach($projectProcurementRows as $pr): ?>
+                    <?php
+                      $status = (string)($pr['status'] ?? 'Pending');
+                      $statusKey = strtolower($status);
+                      $statusClass = 'bg-secondary';
+                      if (in_array($statusKey, ['approved', 'received'], true)) $statusClass = 'bg-success';
+                      elseif (in_array($statusKey, ['pending', 'pending approval', 'sent', 'delivered'], true)) $statusClass = 'bg-warning text-dark';
+                      elseif (in_array($statusKey, ['rejected', 'cancelled', 'failed'], true)) $statusClass = 'bg-danger';
+                    ?>
+                    <tr>
+                      <td class="text-muted small"><?= htmlspecialchars((string)($pr['request_ref'] ?? '-')) ?></td>
+                      <td><?= htmlspecialchars((string)($pr['item_name'] ?? '-')) ?></td>
+                      <td><?= (int)($pr['quantity'] ?? 0) ?></td>
+                      <td><span class="badge <?= $statusClass ?>"><?= htmlspecialchars($status) ?></span></td>
+                      <td>
+                        <?php if (!empty($pr['po_number'])): ?>
+                          <span class="badge text-bg-light border"><?= htmlspecialchars((string)$pr['po_number']) ?></span>
+                        <?php else: ?>
+                          <span class="text-muted">-</span>
+                        <?php endif; ?>
+                      </td>
+                    </tr>
+                  <?php endforeach; ?>
+                  <?php if (empty($projectProcurementRows)): ?>
+                    <tr><td colspan="5" class="text-muted text-center py-4">No submitted project requests yet.</td></tr>
+                  <?php endif; ?>
+                </tbody>
+              </table>
+            </div>
           </div>
 
           <div class="table-card">
@@ -797,6 +932,19 @@ if ($selectedProjectId > 0) {
       if (status) status.value = btn.getAttribute('data-status') || 'Planned';
     }, 0);
   });
+
+  const requestKindSel = document.getElementById('project_request_kind');
+  if (requestKindSel) {
+    const materialFields = Array.from(document.querySelectorAll('[data-request-material]'));
+    const workforceFields = Array.from(document.querySelectorAll('[data-request-workforce]'));
+    const syncRequestType = function () {
+      const workforceMode = requestKindSel.value === 'workforce';
+      materialFields.forEach(function (el) { el.classList.toggle('d-none', workforceMode); });
+      workforceFields.forEach(function (el) { el.classList.toggle('d-none', !workforceMode); });
+    };
+    requestKindSel.addEventListener('change', syncRequestType);
+    syncRequestType();
+  }
 
   const typeSel = document.getElementById('rtype');
   const resSel = document.getElementById('resourceSelect');

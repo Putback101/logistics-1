@@ -238,23 +238,16 @@ if ($avatarPath !== '') {
 </style>
 
 <main class="main-content">
-  <div class="content-area profile-wrap <?= $section === 'profile' ? 'profile-view' : '' ?>">
-    <?php if ($section !== 'profile'): ?>
+  <div class="content-area profile-wrap <?= in_array($section, ['profile', 'password'], true) ? 'profile-view' : '' ?>">
+    <?php if ($section === 'logs'): ?>
       <div class="module-header mb-3">
         <div>
-          <h2 class="mb-1">Profile</h2>
-          <div class="text-muted mb-0">Manage your account details and recent account activity.</div>
+          <h2 class="mb-1">Activity Logs</h2>
+          <div class="text-muted mb-0">Review recent account activity.</div>
         </div>
         <?php if ($isAdmin): ?>
           <a href="users.php" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back</a>
         <?php endif; ?>
-      </div>
-      <div class="mb-3">
-        <div class="profile-tabs">
-          <a href="user_edit.php?<?= $baseQuery ?>section=profile" class="btn <?= $section === 'profile' ? 'btn-primary' : 'btn-outline-secondary' ?>">Profile</a>
-          <a href="user_edit.php?<?= $baseQuery ?>section=password" class="btn <?= $section === 'password' ? 'btn-primary' : 'btn-outline-secondary' ?>">Update Password</a>
-          <a href="user_edit.php?<?= $baseQuery ?>section=logs" class="btn <?= $section === 'logs' ? 'btn-primary' : 'btn-outline-secondary' ?>">Activity Logs</a>
-        </div>
       </div>
     <?php endif; ?>
 
@@ -329,32 +322,35 @@ if ($avatarPath !== '') {
       </div>
 
     <?php elseif ($section === 'password'): ?>
-      <div class="table-card">
-        <h5 class="mb-3">Update Password</h5>
-        <form method="POST" action="../controllers/ProfileController.php" class="row g-3">
-          <input type="hidden" name="action" value="update_password">
-          <input type="hidden" name="user_id" value="<?= (int)$targetUserId ?>">
+      <div class="profile-shell">
+        <div class="table-card">
+          <h4><i class="bi bi-key"></i> Update Password</h4>
+          <hr>
+          <form method="POST" action="../controllers/ProfileController.php" class="row g-3">
+            <input type="hidden" name="action" value="update_password">
+            <input type="hidden" name="user_id" value="<?= (int)$targetUserId ?>">
 
-          <?php if (!$isAdmin || $targetUserId === $sessionUserId): ?>
-          <div class="col-12">
-            <label class="form-label">Current Password</label>
-            <input type="password" name="current_password" class="form-control" required>
-          </div>
-          <?php endif; ?>
+            <?php if (!$isAdmin || $targetUserId === $sessionUserId): ?>
+            <div class="col-12">
+              <label class="form-label">Current Password</label>
+              <input type="password" name="current_password" class="form-control" required>
+            </div>
+            <?php endif; ?>
 
-          <div class="col-md-6">
-            <label class="form-label">New Password</label>
-            <input type="password" name="new_password" class="form-control" minlength="6" required>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label">Confirm New Password</label>
-            <input type="password" name="confirm_password" class="form-control" minlength="6" required>
-          </div>
+            <div class="col-md-6">
+              <label class="form-label">New Password</label>
+              <input type="password" name="new_password" class="form-control" minlength="6" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Confirm New Password</label>
+              <input type="password" name="confirm_password" class="form-control" minlength="6" required>
+            </div>
 
-          <div class="col-12 d-flex gap-2 justify-content-end">
-            <button type="submit" class="btn btn-primary"><i class="bi bi-key"></i> Update Password</button>
-          </div>
-        </form>
+            <div class="col-12 d-flex gap-2 justify-content-end">
+              <button type="submit" class="btn btn-primary"><i class="bi bi-key"></i> Update Password</button>
+            </div>
+          </form>
+        </div>
       </div>
 
     <?php else: ?>

@@ -22,6 +22,84 @@ $success = get_flash('success');
 $error   = get_flash('error');
 ?>
 
+<style>
+.flash-toast-stack {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  z-index: 3200;
+  display: grid;
+  gap: 10px;
+  width: min(360px, calc(100vw - 24px));
+}
+
+.flash-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(12, 16, 28, 0.96);
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.42);
+  color: #e9eef9;
+  transform: translateY(-8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .22s ease, transform .22s ease;
+}
+
+.flash-toast.show {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.flash-toast-icon {
+  width: 22px;
+  line-height: 22px;
+  text-align: center;
+  flex: 0 0 22px;
+}
+
+.flash-toast-message {
+  flex: 1;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.flash-toast-close {
+  border: 0;
+  background: transparent;
+  color: rgba(234, 240, 255, 0.72);
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 2px;
+}
+
+.flash-toast-close:hover {
+  color: #ffffff;
+}
+
+.flash-toast-success {
+  border-left: 4px solid #00e676;
+}
+
+.flash-toast-success .flash-toast-icon {
+  color: #00e676;
+}
+
+.flash-toast-error {
+  border-left: 4px solid #ff6666;
+}
+
+.flash-toast-error .flash-toast-icon {
+  color: #ff6666;
+}
+</style>
+
 <header class="topbar">
   <button class="top-icon mobile-search-trigger" type="button" aria-label="Search" style="display:none;">
     <i class="fas fa-search"></i>
@@ -50,7 +128,7 @@ $error   = get_flash('error');
       </div>
     </div>
 
-    <a href="<?= $base ?>/views/user_edit.php" class="top-icon" title="Settings">
+    <a href="<?= $base ?>/views/user_edit.php?section=password" class="top-icon" title="Change Password">
       <i class="fas fa-cog"></i>
     </a>
 
@@ -68,16 +146,56 @@ $error   = get_flash('error');
   </div>
 </header>
 
-<?php if ($success): ?>
-  <div class="alert alert-success mx-3 mt-2 mb-0">
-    <i class="bi bi-check-circle"></i> <?= htmlspecialchars($success) ?>
+<?php if ($success || $error): ?>
+  <div class="flash-toast-stack" id="flashToastStack">
+    <?php if ($success): ?>
+      <div class="flash-toast flash-toast-success" data-flash-toast>
+        <span class="flash-toast-icon"><i class="bi bi-check-circle-fill"></i></span>
+        <div class="flash-toast-message"><?= htmlspecialchars($success) ?></div>
+        <button type="button" class="flash-toast-close" data-flash-close aria-label="Close notification">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+    <?php endif; ?>
+    <?php if ($error): ?>
+      <div class="flash-toast flash-toast-error" data-flash-toast>
+        <span class="flash-toast-icon"><i class="bi bi-exclamation-triangle-fill"></i></span>
+        <div class="flash-toast-message"><?= htmlspecialchars($error) ?></div>
+        <button type="button" class="flash-toast-close" data-flash-close aria-label="Close notification">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+    <?php endif; ?>
   </div>
-<?php endif; ?>
+  <script>
+    (function () {
+      var toasts = document.querySelectorAll('[data-flash-toast]');
+      if (!toasts.length) return;
 
-<?php if ($error): ?>
-  <div class="alert alert-danger mx-3 mt-2 mb-0">
-    <i class="bi bi-exclamation-triangle"></i> <?= htmlspecialchars($error) ?>
-  </div>
+      toasts.forEach(function (toast, index) {
+        setTimeout(function () {
+          toast.classList.add('show');
+        }, 60 + (index * 80));
+
+        var closeBtn = toast.querySelector('[data-flash-close]');
+        if (closeBtn) {
+          closeBtn.addEventListener('click', function () {
+            toast.classList.remove('show');
+            setTimeout(function () {
+              toast.remove();
+            }, 220);
+          });
+        }
+
+        setTimeout(function () {
+          toast.classList.remove('show');
+          setTimeout(function () {
+            toast.remove();
+          }, 220);
+        }, 4800 + (index * 300));
+      });
+    })();
+  </script>
 <?php endif; ?>
 
 <!-- Generic Add Modal Template -->

@@ -32,7 +32,17 @@ class Asset {
   }
 
   public function getById(int $id) {
-    $stmt = $this->pdo->prepare("SELECT a.*, inv.item_name AS source_inventory_name, inv.location AS source_inventory_location, inv.stock AS source_inventory_stock FROM assets a LEFT JOIN inventory inv ON inv.id = a.source_inventory_id WHERE a.id=?");
+    $stmt = $this->pdo->prepare("
+      SELECT a.*,
+             u.fullname AS assigned_name,
+             inv.item_name AS source_inventory_name,
+             inv.location AS source_inventory_location,
+             inv.stock AS source_inventory_stock
+      FROM assets a
+      LEFT JOIN users u ON u.id = a.assigned_to
+      LEFT JOIN inventory inv ON inv.id = a.source_inventory_id
+      WHERE a.id=?
+    ");
     $stmt->execute([$id]);
     return $stmt->fetch();
   }
@@ -102,6 +112,15 @@ class Asset {
   public function delete(int $id): void {
     $stmt = $this->pdo->prepare("DELETE FROM assets WHERE id=?");
     $stmt->execute([$id]);
+  }
+
+  public function existsBySourceInventoryId(int $sourceInventoryId): bool {
+    if ($sourceInventoryId <= 0) {
+      return false;
+    }
+    $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM assets WHERE source_inventory_id = ?");
+    $stmt->execute([$sourceInventoryId]);
+    return (int)$stmt->fetchColumn() > 0;
   }
 
   // -----------------------------

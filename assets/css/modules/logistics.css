@@ -400,6 +400,17 @@
     background: rgba(255, 255, 255, 0.02);
 }
 
+.main-content .table-card .table tbody tr.asset-selected-row td {
+    background: rgba(0, 214, 143, 0.16) !important;
+    color: #ecfff8 !important;
+}
+
+.main-content .table-card .table tbody tr.asset-selected-row td .badge.text-bg-info {
+    background: rgba(0, 214, 143, 0.22) !important;
+    color: #d9fff3 !important;
+    border: 1px solid rgba(0, 214, 143, 0.45);
+}
+
 .main-content .table-card .table td .btn.btn-sm {
     border: 0 !important;
     background: transparent !important;
